@@ -1,0 +1,3 @@
+# Empty placeholder — user must drop imagery/datasets here manually.
+# See .env for STORAGE_LOCAL_ROOT configuration.
+# See DATASET INJECTION POINT comments throughout the codebase.

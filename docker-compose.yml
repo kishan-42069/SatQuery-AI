@@ -1,0 +1,59 @@
+version: "3.9"
+
+# ⚠️  IMPORTANT — STORAGE NOTE:
+# All satellite imagery, model weights, and derived products are stored under
+# the `./data` directory on the HOST machine (mounted into the container).
+# This is the MVP local-filesystem storage. For production, replace the
+# volume mount with an S3-compatible object storage backend via STORAGE_BACKEND=s3 in .env.
+
+services:
+  api:
+    build: .
+    container_name: satquery_api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - .:/app                       # Live code reload during development
+      - satquery_data:/app/data      # Persistent dataset & output storage
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgis/postgis:16-3.4   # PostgreSQL 16 with PostGIS 3.4
+    container_name: satquery_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - satquery_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: satquery_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  satquery_pgdata:
+  satquery_data:
