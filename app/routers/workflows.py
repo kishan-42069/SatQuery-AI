@@ -1,21 +1,19 @@
-# Specialist Workflows Router: receives orchestrator results for VQA, Captioning,
-# Grounding, Change Detection, and SAR Fusion (FR-005 to FR-009).
-from __future__ import annotations
-
 import uuid
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from app.core.logger import get_logger
 from app.schemas.workflows import FindingResponse, WorkflowResultResponse, WorkflowType
+from app.core.database import get_db
+from app.models.analysis_run import AnalysisRun
+from app.models.finding import Finding
 
 router = APIRouter(prefix="/workflows", tags=["Specialist Workflows"])
 logger = get_logger("router.workflows")
-
-# In-memory run store for MVP.
-_run_store: dict[str, dict] = {}
 
 
 @router.get(
@@ -23,11 +21,34 @@ _run_store: dict[str, dict] = {}
     response_model=WorkflowResultResponse,
     summary="Get workflow result by run ID (FR-005 to FR-009)",
 )
-async def get_workflow_result(run_id: str):
+async def get_workflow_result(run_id: str, db: AsyncSession = Depends(get_db)):
     """Returns the structured result of a completed specialist workflow run."""
-    if run_id not in _run_store:
+    result = await db.execute(select(AnalysisRun).where(AnalysisRun.run_id == run_id))
+    run = result.scalars().first()
+    
+    if not run:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Run '{run_id}' not found.")
-    return WorkflowResultResponse(**_run_store[run_id])
+        
+    findings_result = await db.execute(select(Finding).where(Finding.run_id == run_id))
+    findings = findings_result.scalars().all()
+    
+    return WorkflowResultResponse(
+        run_id=run.run_id,
+        query_id=run.query_id,
+        workflow=run.workflow,
+        status=run.status,
+        findings=[
+            FindingResponse(
+                label=f.label,
+                confidence=f.confidence,
+                evidence_refs=f.evidence_refs,
+                geometry=None # Simplified for MVP response
+            ) for f in findings
+        ],
+        trace=run.trace,
+        error=run.error,
+        duration_ms=run.duration_ms
+    )
 
 
 @router.get(
@@ -35,12 +56,38 @@ async def get_workflow_result(run_id: str):
     response_model=list[WorkflowResultResponse],
     summary="List all workflow runs for a query",
 )
-async def list_runs_for_query(query_id: str):
-    runs = [r for r in _run_store.values() if r.get("query_id") == query_id]
-    return [WorkflowResultResponse(**r) for r in runs]
+async def list_runs_for_query(query_id: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(AnalysisRun).where(AnalysisRun.query_id == query_id))
+    runs = result.scalars().all()
+    
+    responses = []
+    for run in runs:
+        findings_result = await db.execute(select(Finding).where(Finding.run_id == run.run_id))
+        findings = findings_result.scalars().all()
+        responses.append(
+            WorkflowResultResponse(
+                run_id=run.run_id,
+                query_id=run.query_id,
+                workflow=run.workflow,
+                status=run.status,
+                findings=[
+                    FindingResponse(
+                        label=f.label,
+                        confidence=f.confidence,
+                        evidence_refs=f.evidence_refs,
+                        geometry=None
+                    ) for f in findings
+                ],
+                trace=run.trace,
+                error=run.error,
+                duration_ms=run.duration_ms
+            )
+        )
+    return responses
 
 
-def store_workflow_result(
+async def store_workflow_result(
+    db: AsyncSession,
     query_id: str,
     workflow: WorkflowType,
     findings: list[FindingResponse],
@@ -53,16 +100,30 @@ def store_workflow_result(
     Returns the generated run_id.
     """
     run_id = uuid.uuid4().hex
-    _run_store[run_id] = {
-        "run_id": run_id,
-        "query_id": query_id,
-        "workflow": workflow,
-        "status": "failed" if error else "completed",
-        "findings": [f.model_dump() for f in findings],
-        "trace": trace,
-        "error": error,
-        "duration_ms": duration_ms,
-    }
+    
+    run = AnalysisRun(
+        run_id=run_id,
+        query_id=query_id,
+        workflow=workflow,
+        status="failed" if error else "completed",
+        trace=trace,
+        error=error,
+        duration_ms=duration_ms
+    )
+    db.add(run)
+    
+    for f in findings:
+        finding = Finding(
+            finding_id=uuid.uuid4().hex,
+            run_id=run_id,
+            label=f.label,
+            confidence=f.confidence,
+            evidence_refs=f.evidence_refs,
+            geometry=None # Simplification for MVP
+        )
+        db.add(finding)
+        
+    await db.commit()
     logger.info("workflow_result_stored", run_id=run_id, workflow=workflow.value, error=bool(error))
     return run_id
 
@@ -70,9 +131,10 @@ def store_workflow_result(
 # ── GRACEFUL FAILURE HANDLERS ─────────────────────────────────────────────────
 # Called by the orchestrator when a workflow cannot complete (FR-015).
 
-def handle_unsupported_modality(query_id: str, workflow: WorkflowType, modality: str) -> str:
+async def handle_unsupported_modality(db: AsyncSession, query_id: str, workflow: WorkflowType, modality: str) -> str:
     """Stores a failed run record for unsupported image modalities."""
-    return store_workflow_result(
+    return await store_workflow_result(
+        db=db,
         query_id=query_id,
         workflow=workflow,
         findings=[],
@@ -81,9 +143,10 @@ def handle_unsupported_modality(query_id: str, workflow: WorkflowType, modality:
     )
 
 
-def handle_low_confidence(query_id: str, workflow: WorkflowType, confidence: float) -> str:
+async def handle_low_confidence(db: AsyncSession, query_id: str, workflow: WorkflowType, confidence: float) -> str:
     """Stores a warning run record when model confidence falls below threshold."""
-    return store_workflow_result(
+    return await store_workflow_result(
+        db=db,
         query_id=query_id,
         workflow=workflow,
         findings=[],

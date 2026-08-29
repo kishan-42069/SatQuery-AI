@@ -14,4 +14,8 @@ class Query(Base):
     session_id = Column(String, ForeignKey("sessions.session_id"), nullable=False, index=True)
     text = Column(String, nullable=False)
     referenced_assets = Column(JSONB, nullable=False, default=list)  # list of asset_ids
+    status = Column(String, nullable=False, default="queued")
+    result = Column(JSONB, nullable=True)
+    trace = Column(JSONB, nullable=True)
+    error = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

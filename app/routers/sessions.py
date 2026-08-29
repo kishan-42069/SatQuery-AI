@@ -1,12 +1,11 @@
-# Session & Query Router: session lifecycle, NL query submission, WebSocket streaming (FR-003, FR-004, FR-012).
-from __future__ import annotations
-
 import asyncio
 import json
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
 
 from app.core.logger import get_logger
 from app.core.redis_client import get_redis_client
@@ -19,13 +18,12 @@ from app.schemas.sessions import (
     SessionInfoResponse,
     SessionState,
 )
+from app.core.database import get_db
+from app.models.session import Session
+from app.models.query import Query
 
 router = APIRouter(prefix="/sessions", tags=["Sessions & Queries"])
 logger = get_logger("router.sessions")
-
-# In-memory session and query stores for MVP — replace with DB + Redis persistence.
-_session_store: dict[str, dict] = {}
-_query_store: dict[str, dict] = {}
 
 
 @router.post(
@@ -34,19 +32,27 @@ _query_store: dict[str, dict] = {}
     status_code=status.HTTP_201_CREATED,
     summary="Create a new analysis session (FR-012)",
 )
-async def create_session():
+async def create_session(db: AsyncSession = Depends(get_db)):
     session_id = uuid.uuid4().hex
-    record = {
-        "session_id": session_id,
-        "state": SessionState.active,
-        "created_at": datetime.utcnow(),
-        "query_count": 0,
-        "referenced_asset_ids": [],
-        "conversation_history": [],  # Session-level conversational memory
-    }
-    _session_store[session_id] = record
+    
+    new_session = Session(
+        session_id=session_id,
+        state=SessionState.active,
+        conversation_history=[]
+    )
+    db.add(new_session)
+    await db.commit()
+    await db.refresh(new_session)
+    
     logger.info("session_created", session_id=session_id)
-    return SessionCreateResponse(**record)
+    return SessionCreateResponse(
+        session_id=new_session.session_id,
+        state=new_session.state,
+        created_at=new_session.created_at,
+        query_count=0,
+        referenced_asset_ids=[],
+        conversation_history=[]
+    )
 
 
 @router.get(
@@ -54,9 +60,28 @@ async def create_session():
     response_model=SessionInfoResponse,
     summary="Get session info",
 )
-async def get_session(session_id: str):
-    _require_session(session_id)
-    return SessionInfoResponse(**_session_store[session_id])
+async def get_session(session_id: str, db: AsyncSession = Depends(get_db)):
+    session = await _require_session(session_id, db)
+    
+    # Get query count
+    count_result = await db.execute(select(func.count(Query.query_id)).where(Query.session_id == session_id))
+    query_count = count_result.scalar_one_or_none() or 0
+    
+    # Get referenced assets
+    queries_result = await db.execute(select(Query.referenced_assets).where(Query.session_id == session_id))
+    referenced_assets = set()
+    for q in queries_result.scalars():
+        if q:
+            referenced_assets.update(q)
+            
+    return SessionInfoResponse(
+        session_id=session.session_id,
+        state=session.state,
+        created_at=session.created_at,
+        query_count=query_count,
+        referenced_asset_ids=list(referenced_assets),
+        conversation_history=session.conversation_history
+    )
 
 
 @router.delete(
@@ -64,9 +89,14 @@ async def get_session(session_id: str):
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Close and delete a session",
 )
-async def close_session(session_id: str):
-    _require_session(session_id)
-    _session_store.pop(session_id)
+async def close_session(session_id: str, db: AsyncSession = Depends(get_db)):
+    session = await _require_session(session_id, db)
+    
+    # Cascade delete might not be set up, so delete queries first
+    await db.execute(Query.__table__.delete().where(Query.session_id == session_id))
+    await db.delete(session)
+    await db.commit()
+    
     logger.info("session_closed", session_id=session_id)
 
 
@@ -76,27 +106,23 @@ async def close_session(session_id: str):
     status_code=status.HTTP_202_ACCEPTED,
     summary="Submit a natural-language query (FR-003, FR-004)",
 )
-async def submit_query(session_id: str, body: QueryRequest):
-    _require_session(session_id)
+async def submit_query(session_id: str, body: QueryRequest, db: AsyncSession = Depends(get_db)):
+    session = await _require_session(session_id, db)
 
     # Sanitize NL input against prompt injection before passing to orchestrator
     safe_text = sanitize_query(body.text)
 
     query_id = uuid.uuid4().hex
-    query_record = {
-        "query_id": query_id,
-        "session_id": session_id,
-        "text": safe_text,
-        "asset_ids": body.asset_ids,
-        "status": "queued",
-        "result": None,
-        "trace": None,
-        "error": None,
-        "created_at": datetime.utcnow(),
-    }
-    _query_store[query_id] = query_record
-    _session_store[session_id]["query_count"] += 1
-    _session_store[session_id]["referenced_asset_ids"].extend(body.asset_ids)
+    
+    new_query = Query(
+        query_id=query_id,
+        session_id=session_id,
+        text=safe_text,
+        referenced_assets=body.asset_ids,
+        status="queued"
+    )
+    db.add(new_query)
+    await db.commit()
 
     # Queue the query for async orchestrator execution
     redis = get_redis_client()
@@ -111,10 +137,21 @@ async def submit_query(session_id: str, body: QueryRequest):
     response_model=QueryStatusResponse,
     summary="Poll query status (FR-004)",
 )
-async def get_query_status(session_id: str, query_id: str):
-    _require_session(session_id)
-    _require_query(query_id, session_id)
-    return QueryStatusResponse(**_query_store[query_id])
+async def get_query_status(session_id: str, query_id: str, db: AsyncSession = Depends(get_db)):
+    await _require_session(session_id, db)
+    query = await _require_query(query_id, session_id, db)
+    
+    return QueryStatusResponse(
+        query_id=query.query_id,
+        session_id=query.session_id,
+        text=query.text,
+        asset_ids=query.referenced_assets,
+        status=query.status,
+        result=query.result,
+        trace=query.trace,
+        error=query.error,
+        created_at=query.created_at
+    )
 
 
 # ── WEBSOCKET: Real-time agent trace streaming ─────────────────────────────────
@@ -139,11 +176,16 @@ async def session_websocket(websocket: WebSocket, session_id: str):
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
-def _require_session(session_id: str) -> None:
-    if session_id not in _session_store:
+async def _require_session(session_id: str, db: AsyncSession) -> Session:
+    result = await db.execute(select(Session).where(Session.session_id == session_id))
+    session = result.scalars().first()
+    if not session:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Session '{session_id}' not found.")
+    return session
 
-def _require_query(query_id: str, session_id: str) -> None:
-    q = _query_store.get(query_id)
-    if not q or q["session_id"] != session_id:
+async def _require_query(query_id: str, session_id: str, db: AsyncSession) -> Query:
+    result = await db.execute(select(Query).where(Query.query_id == query_id))
+    q = result.scalars().first()
+    if not q or q.session_id != session_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Query '{query_id}' not found in session '{session_id}'.")
+    return q

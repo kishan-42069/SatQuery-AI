@@ -2,6 +2,7 @@ import asyncio
 import json
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from app.agents.orchestrator import run_pipeline
 from app.core.database import AsyncSessionLocal
@@ -11,8 +12,9 @@ from app.models.analysis_run import AnalysisRun
 from app.models.finding import Finding
 from app.models.query import Query
 from app.models.report import Report
-from app.routers.sessions import _query_store, _session_store
+from app.models.image_asset import ImageAsset
 from app.routers.workflows import store_workflow_result
+from app.routers.reports import store_report
 
 logger = get_logger("worker.query")
 
@@ -21,100 +23,84 @@ async def process_query(query_id: str, session_id: str) -> None:
     """Processes a single query through the LangGraph orchestrator."""
     logger.info("processing_query", query_id=query_id, session_id=session_id)
     
-    # ── For MVP, we fall back to in-memory store if DB is empty, 
-    # but let's wire up DB persistence where possible.
-    query_record = _query_store.get(query_id)
-    if not query_record:
-        logger.error("query_not_found", query_id=query_id)
-        return
-        
-    query_record["status"] = "processing"
-    
-    # Publish trace update to WebSocket
     redis = get_redis_client()
-    await redis.publish(f"satquery:traces:{session_id}", json.dumps({"step": "worker_started", "query_id": query_id}))
     
-    # Retrieve asset paths
-    # In a real app, query DB. Here we just mock it.
-    asset_ids = query_record.get("asset_ids", [])
-    asset_paths = {}
-    from app.routers.assets import _asset_store
-    for aid in asset_ids:
-        if aid in _asset_store:
-            asset_paths[aid] = _asset_store[aid]["storage_path"]
-            
-    # Run the orchestrator pipeline
-    try:
-        final_state = await run_pipeline(
-            query_id=query_id,
-            session_id=session_id,
-            query_text=query_record["text"],
-            asset_ids=asset_ids,
-            asset_paths=asset_paths
-        )
+    async with AsyncSessionLocal() as db:
+        # Retrieve Query
+        result = await db.execute(select(Query).where(Query.query_id == query_id))
+        query_record = result.scalars().first()
         
-        # Save results to DB
-        async with AsyncSessionLocal() as db_session:
-            # Create analysis run
-            run_id = store_workflow_result(
+        if not query_record:
+            logger.error("query_not_found", query_id=query_id)
+            return
+            
+        query_record.status = "processing"
+        await db.commit()
+        
+        # Publish trace update to WebSocket
+        await redis.publish(f"satquery:traces:{session_id}", json.dumps({"step": "worker_started", "query_id": query_id}))
+        
+        # Retrieve asset paths
+        asset_ids = query_record.referenced_assets
+        asset_paths = {}
+        for aid in asset_ids:
+            asset_res = await db.execute(select(ImageAsset).where(ImageAsset.asset_id == aid))
+            asset = asset_res.scalars().first()
+            if asset:
+                asset_paths[aid] = asset.uri
+                
+        # Run the orchestrator pipeline
+        try:
+            final_state = await run_pipeline(
+                query_id=query_id,
+                session_id=session_id,
+                query_text=query_record.text,
+                asset_ids=asset_ids,
+                asset_paths=asset_paths
+            )
+            
+            # Save results to DB
+            run_id = await store_workflow_result(
+                db=db,
                 query_id=query_id,
                 workflow=final_state.get("selected_workflow", "unknown"),
                 findings=final_state.get("findings", []),
                 trace=final_state.get("trace", []),
+                duration_ms=None,
                 error=final_state.get("error")
             )
             
-            db_run = AnalysisRun(
-                run_id=run_id,
-                query_id=query_id,
-                plan=final_state.get("plan"),
-                tools_used=[],
-                status="failed" if final_state.get("error") else "completed"
-            )
-            db_session.add(db_run)
+            # Additional analysis run fields not handled by store_workflow_result
+            run_res = await db.execute(select(AnalysisRun).where(AnalysisRun.run_id == run_id))
+            db_run = run_res.scalars().first()
+            if db_run:
+                db_run.plan = final_state.get("plan")
             
-            for finding in final_state.get("findings", []):
-                db_finding = Finding(
-                    finding_id=finding["finding_id"],
-                    run_id=run_id,
-                    label=finding.get("label"),
-                    confidence=finding.get("confidence", 0.0),
-                    evidence_refs=finding.get("evidence_refs", [])
-                )
-                db_session.add(db_finding)
-                
             report_data = final_state.get("report")
             if report_data:
-                db_report = Report(
-                    report_id=report_data["report_id"],
+                await store_report(
+                    db=db,
                     run_id=run_id,
                     session_id=session_id,
                     summary=report_data["summary"],
                     evidence=report_data["evidence"]
                 )
-                db_session.add(db_report)
-                from app.routers.reports import store_report
-                store_report(
-                    run_id=run_id,
-                    session_id=session_id,
-                    summary=report_data["summary"],
-                    evidence=report_data["evidence"]
-                )
-                
-            await db_session.commit()
-        
-        query_record["status"] = "completed"
-        query_record["trace"] = final_state.get("trace")
-        query_record["result"] = {"run_id": run_id}
-        
-        await redis.publish(f"satquery:traces:{session_id}", json.dumps({"step": "worker_completed", "query_id": query_id, "run_id": run_id}))
-        logger.info("query_completed", query_id=query_id)
-        
-    except Exception as exc:
-        logger.exception("pipeline_crashed", query_id=query_id)
-        query_record["status"] = "failed"
-        query_record["error"] = str(exc)
-        await redis.publish(f"satquery:traces:{session_id}", json.dumps({"step": "worker_failed", "query_id": query_id, "error": str(exc)}))
+                    
+            query_record.status = "failed" if final_state.get("error") else "completed"
+            query_record.trace = final_state.get("trace")
+            query_record.result = {"run_id": run_id}
+            
+            await db.commit()
+            
+            await redis.publish(f"satquery:traces:{session_id}", json.dumps({"step": "worker_completed", "query_id": query_id, "run_id": run_id}))
+            logger.info("query_completed", query_id=query_id)
+            
+        except Exception as exc:
+            logger.exception("pipeline_crashed", query_id=query_id)
+            query_record.status = "failed"
+            query_record.error = str(exc)
+            await db.commit()
+            await redis.publish(f"satquery:traces:{session_id}", json.dumps({"step": "worker_failed", "query_id": query_id, "error": str(exc)}))
 
 
 async def worker_loop() -> None:
