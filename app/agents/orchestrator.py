@@ -6,6 +6,8 @@ import json
 import time
 from typing import Literal
 
+from pydantic import BaseModel, Field
+
 from langgraph.graph import END, START, StateGraph
 
 from app.agents.specialists import (
@@ -31,6 +33,13 @@ _llm = get_llm()
 CONFIDENCE_THRESHOLD = 0.4
 
 
+class PlannerSchema(BaseModel):
+    plan: str = Field(description="Brief reasoning for the selected workflow and prompt.")
+    workflow: Literal["vqa", "captioning", "grounding", "change_detection", "sar_fusion"] = Field(description="The selected specialist workflow.")
+    requires_validation: bool = Field(description="True if the query is ambiguous or confidence may be low.")
+    specialist_prompt: str = Field(description="A tailored prompt guiding the selected specialist agent to accomplish the sub-task.")
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # NODE FUNCTIONS
 # Each function receives the full AgentState and returns a partial state update.
@@ -43,43 +52,51 @@ def plan_node(state: AgentState) -> AgentState:
     """
     query = state.get("query_text", "")
     asset_ids = state.get("asset_ids", [])
+    chat_history = state.get("chat_history", [])
 
     trace_step = {"step": "plan", "input": {"query": query[:200], "asset_count": len(asset_ids)}}
+    
+    history_str = "\n".join([f"{msg.get('role', 'user')}: {msg.get('content', '')}" for msg in chat_history[-5:]]) if chat_history else "No previous context."
 
     prompt = f"""You are the SatQuery AI orchestrator for satellite image analysis.
+
+Recent Conversation Context:
+{history_str}
 
 User query: {query}
 Available assets: {asset_ids}
 Available workflows: vqa, captioning, grounding, change_detection, sar_fusion
 
-Based on the query and available assets, select EXACTLY ONE workflow from the list above.
-Respond with a JSON object:
-{{"plan": "<brief reasoning>", "workflow": "<selected_workflow>", "requires_validation": <true|false>}}
+Based on the query and available assets, select EXACTLY ONE workflow.
+Generate a specific `specialist_prompt` to guide the chosen agent for this task.
 
 Rules:
 - Prefer geospatial/deterministic operations over model calls when possible.
 - Set requires_validation=true if the query is ambiguous or confidence may be low.
 """
 
+    structured_llm = _llm.with_structured_output(PlannerSchema)
+
     try:
-        response = _llm.invoke(prompt)
-        content = response.content if hasattr(response, "content") else str(response)
-        parsed = json.loads(content.strip().strip("```json").strip("```"))
-        plan = parsed.get("plan", "No plan provided.")
-        workflow = parsed.get("workflow", "vqa")
-        requires_validation = parsed.get("requires_validation", False)
+        parsed: PlannerSchema = structured_llm.invoke(prompt)
+        plan = parsed.plan
+        workflow = parsed.workflow
+        requires_validation = parsed.requires_validation
+        specialist_prompt = parsed.specialist_prompt
     except Exception as exc:
         logger.warning("plan_parse_failed", error=str(exc))
         plan = f"Defaulted to VQA due to planning error: {exc}"
         workflow = "vqa"
         requires_validation = True
+        specialist_prompt = query
 
-    trace_step["output"] = {"plan": plan, "workflow": workflow, "requires_validation": requires_validation}
+    trace_step["output"] = {"plan": plan, "workflow": workflow, "requires_validation": requires_validation, "specialist_prompt": specialist_prompt}
     logger.info("plan_complete", workflow=workflow, requires_validation=requires_validation)
 
     return {
         "plan": plan,
         "selected_workflow": workflow,
+        "specialist_prompt": specialist_prompt,
         "requires_validation": requires_validation,
         "trace": state.get("trace", []) + [trace_step],
         "intermediate_outputs": {},
@@ -253,7 +270,7 @@ def _merge_agent_result(state: AgentState, agent_name: str, result: dict) -> Age
 
 from app.core.metrics import track_performance
 
-async def run_pipeline(query_id: str, session_id: str, query_text: str, asset_ids: list[str], asset_paths: dict) -> AgentState:
+async def run_pipeline(query_id: str, session_id: str, query_text: str, asset_ids: list[str], asset_paths: dict, chat_history: list[dict] = None) -> AgentState:
     """Entry point: invokes the compiled graph and returns the final state."""
     initial_state: AgentState = {
         "query_id": query_id,
@@ -261,6 +278,7 @@ async def run_pipeline(query_id: str, session_id: str, query_text: str, asset_id
         "query_text": query_text,
         "asset_ids": asset_ids,
         "asset_paths": asset_paths,
+        "chat_history": chat_history or [],
         "trace": [{"step": "start", "query_id": query_id, "session_id": session_id}],
     }
     with track_performance(f"pipeline_run_{query_id}"):

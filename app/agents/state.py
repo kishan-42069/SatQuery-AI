@@ -17,10 +17,12 @@ class AgentState(TypedDict, total=False):
     query_text: str                          # Sanitized NL query from the user
     asset_ids: list[str]                     # Asset IDs referenced in this query
     asset_paths: dict[str, str]              # asset_id -> local file path
+    chat_history: list[dict[str, str]]       # Conversational memory (FR-012)
 
     # ── Plan ─────────────────────────────────────────────────────────────────
     plan: str                                # Orchestrator's plain-text reasoning
     selected_workflow: str                   # Which specialist to invoke
+    specialist_prompt: str                   # Tailored prompt guiding the specialist agent
     requires_validation: bool                # High-uncertainty flag triggers validation step
 
     # ── Intermediate outputs (passed between specialist agents) ───────────────

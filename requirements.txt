@@ -21,6 +21,7 @@ alembic==1.13.3
 
 # Cache & Job Queue
 redis==5.1.1
+tenacity==8.5.0
 
 # Agent Framework
 langgraph==0.2.35

@@ -3,13 +3,13 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
-from app.core.database import init_db
+from app.core.database import init_db, check_db_connection
 from app.core.logger import get_logger, setup_logging
-from app.core.redis_client import close_redis_pool, get_redis_client
+from app.core.redis_client import close_redis_pool, get_redis_client, check_redis_connection
 from app.middleware.security import SecurityMiddleware
 from app.routers import assets, auth, reports, sessions, workflows
 
@@ -72,4 +72,8 @@ app.include_router(reports.router, prefix="/api/v1")
 @app.get("/health", tags=["Health"])
 async def health_check():
     """Health probe for Docker/load balancer."""
-    return {"status": "ok", "version": "0.1.0", "env": settings.app_env}
+    db_ok = await check_db_connection()
+    redis_ok = await check_redis_connection()
+    if not (db_ok and redis_ok):
+        raise HTTPException(status_code=503, detail={"status": "error", "db": db_ok, "redis": redis_ok})
+    return {"status": "ok", "version": "0.1.0", "env": settings.app_env, "db": db_ok, "redis": redis_ok}

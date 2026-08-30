@@ -12,6 +12,7 @@ from app.models.analysis_run import AnalysisRun
 from app.models.finding import Finding
 from app.models.query import Query
 from app.models.report import Report
+from app.models.session import Session
 from app.models.image_asset import ImageAsset
 from app.routers.workflows import store_workflow_result
 from app.routers.reports import store_report
@@ -49,6 +50,11 @@ async def process_query(query_id: str, session_id: str) -> None:
             if asset:
                 asset_paths[aid] = asset.uri
                 
+        # Retrieve Session to get conversation history
+        session_res = await db.execute(select(Session).where(Session.session_id == session_id))
+        session_record = session_res.scalars().first()
+        chat_history = session_record.conversation_history if session_record else []
+                
         # Run the orchestrator pipeline
         try:
             final_state = await run_pipeline(
@@ -56,7 +62,8 @@ async def process_query(query_id: str, session_id: str) -> None:
                 session_id=session_id,
                 query_text=query_record.text,
                 asset_ids=asset_ids,
-                asset_paths=asset_paths
+                asset_paths=asset_paths,
+                chat_history=chat_history
             )
             
             # Save results to DB
@@ -89,6 +96,14 @@ async def process_query(query_id: str, session_id: str) -> None:
             query_record.status = "failed" if final_state.get("error") else "completed"
             query_record.trace = final_state.get("trace")
             query_record.result = {"run_id": run_id}
+            
+            # Update session conversational history
+            if session_record:
+                hist = list(session_record.conversation_history)
+                hist.append({"role": "user", "content": query_record.text})
+                agent_reply = final_state.get("plan") or "Workflow executed."
+                hist.append({"role": "assistant", "content": agent_reply})
+                session_record.conversation_history = hist
             
             await db.commit()
             

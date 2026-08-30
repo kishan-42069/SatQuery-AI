@@ -46,3 +46,14 @@ async def init_db() -> None:
     """Creates all tables on startup (dev only; use Alembic migrations in production)."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+
+async def check_db_connection() -> bool:
+    """Pings the database to check connection health."""
+    try:
+        from sqlalchemy import text
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        return True
+    except Exception:
+        return False

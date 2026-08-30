@@ -45,8 +45,11 @@ services:
   redis:
     image: redis:7.4-alpine
     container_name: satquery_redis
+    command: redis-server --appendonly yes --save 60 1
     ports:
       - "6379:6379"
+    volumes:
+      - satquery_redisdata:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -57,3 +60,4 @@ services:
 volumes:
   satquery_pgdata:
   satquery_data:
+  satquery_redisdata:

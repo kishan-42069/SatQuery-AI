@@ -29,3 +29,13 @@ async def close_redis_pool() -> None:
     if _pool:
         await _pool.disconnect()
         _pool = None
+
+
+async def check_redis_connection() -> bool:
+    """Pings Redis to check connection health."""
+    try:
+        client = get_redis_client()
+        return bool(await client.ping())
+    except Exception:
+        return False
+
