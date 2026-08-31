@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>SatQuery AI - Backend Verification & Test UI (SIH 2026 - ISRO)</title>
+</head>
+<body>
+    <h1>SatQuery AI: Vision-Language Remote Sensing Assistant</h1>
+    <p><b>SIH 2026 Problem Statement 26167 | Indian Space Research Organisation (ISRO)</b></p>
+    <hr>
+
+    <h2>1. System Status & Health</h2>
+    <div id="health_status">Checking backend health...</div>
+    <button onclick="checkHealth()">Refresh Health</button>
+    <hr>
+
+    <h2>2. Demonstration Workflow: Dual GeoTIFF Analysis</h2>
+    <form id="analysis_form" onsubmit="submitAnalysis(event)">
+        <div>
+            <label><b>Image 1 (Reference / Before GeoTIFF .tif):</b></label><br>
+            <input type="file" id="image_1" name="image_1" accept=".tif,.tiff" required><br><br>
+        </div>
+
+        <div>
+            <label><b>Image 2 (Target / After GeoTIFF .tif - Optional for single-image VQA):</b></label><br>
+            <input type="file" id="image_2" name="image_2" accept=".tif,.tiff"><br><br>
+        </div>
+
+        <div>
+            <label><b>Natural Language Query:</b></label><br>
+            <textarea id="query" name="query" rows="3" cols="80" required>What's the difference between the two?</textarea><br>
+            <small>Quick Templates: </small>
+            <button type="button" onclick="setQuery('What\'s the difference between the two?')">Bi-temporal Change</button>
+            <button type="button" onclick="setQuery('Find all built-up structures and water bodies.')">Grounding</button>
+            <button type="button" onclick="setQuery('Describe the primary terrain and land cover visible in this scene.')">Scene VQA</button>
+            <br><br>
+        </div>
+
+        <div>
+            <button type="submit" id="submit_btn">Run SatQuery AI Pipeline</button>
+        </div>
+    </form>
+    <hr>
+
+    <h2>3. Execution Output & Agent Pipeline Trace</h2>
+    <div id="loading_indicator" style="display:none;">
+        <p><b>Processing request... Orchestrating specialist agents & Gemini VLM...</b></p>
+    </div>
+
+    <div id="results_container" style="display:none;">
+        <h3>Orchestrator Decision</h3>
+        <p><b>Selected Workflow:</b> <span id="res_workflow"></span></p>
+        <p><b>Reasoning:</b> <span id="res_reasoning"></span></p>
+        <p><b>Confidence:</b> <span id="res_plan_conf"></span></p>
+
+        <h3>Executive Intelligence Report</h3>
+        <p><b>Summary:</b></p>
+        <div id="res_executive_summary"></div>
+        <p><b>Key Findings:</b></p>
+        <ul id="res_key_findings"></ul>
+        <p><b>Spatial Impact:</b> <span id="res_spatial_impact"></span></p>
+        <p><b>Confidence Assessment:</b> <span id="res_confidence_assessment"></span></p>
+        <p><b>Operational Recommendations:</b></p>
+        <ul id="res_recommendations"></ul>
+
+        <h3>Specialist Agent Results & Detections</h3>
+        <div id="res_specialist_summary"></div>
+        <div id="res_detections_list"></div>
+
+        <h3>Geospatial GeoJSON Coordinates (WGS84 & Native CRS)</h3>
+        <pre id="res_geojson" style="white-space:pre-wrap; border:1px solid black; padding:10px;"></pre>
+
+        <h3>Extracted GeoTIFF Metadata</h3>
+        <pre id="res_metadata" style="white-space:pre-wrap; border:1px solid black; padding:10px;"></pre>
+
+        <h3>Pipeline Execution Trace</h3>
+        <table border="1" cellpadding="5" cellspacing="0" id="res_trace_table">
+            <thead>
+                <tr>
+                    <th>Step</th>
+                    <th>Agent / Component</th>
+                    <th>Status</th>
+                    <th>Duration (ms)</th>
+                </tr>
+            </thead>
+            <tbody id="res_trace_body"></tbody>
+        </table>
+
+        <h3>Raw Response JSON</h3>
+        <pre id="res_raw_json" style="white-space:pre-wrap; border:1px solid black; padding:10px;"></pre>
+    </div>
+
+    <script>
+        async function checkHealth() {
+            try {
+                const res = await fetch('/api/v1/health');
+                const data = await res.json();
+                document.getElementById('health_status').innerHTML = 
+                    '<b>Backend:</b> ' + data.status + ' | ' +
+                    '<b>Gemini VLM:</b> ' + data.gemini_vlm.mode + ' (Model: ' + data.gemini_vlm.model + ') | ' +
+                    '<b>Database:</b> ' + (data.database.available ? 'Connected (' + data.database.engine + ')' : 'Offline mode') + ' | ' +
+                    '<b>Target CRS:</b> ' + data.geospatial_engine.target_crs;
+            } catch (err) {
+                document.getElementById('health_status').innerHTML = '<b>Error connecting to backend:</b> ' + err.message;
+            }
+        }
+
+        function setQuery(q) {
+            document.getElementById('query').value = q;
+        }
+
+        async function submitAnalysis(event) {
+            event.preventDefault();
+            const btn = document.getElementById('submit_btn');
+            const loading = document.getElementById('loading_indicator');
+            const results = document.getElementById('results_container');
+
+            btn.disabled = true;
+            loading.style.display = 'block';
+            results.style.display = 'none';
+
+            const formData = new FormData();
+            formData.append('query', document.getElementById('query').value);
+
+            const file1 = document.getElementById('image_1').files[0];
+            if (file1) {
+                formData.append('image_1', file1);
+            }
+
+            const file2 = document.getElementById('image_2').files[0];
+            if (file2) {
+                formData.append('image_2', file2);
+            }
+
+            try {
+                const response = await fetch('/api/v1/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    alert('Error: ' + (data.detail || JSON.stringify(data)));
+                    return;
+                }
+
+                // Render Results
+                document.getElementById('res_workflow').innerText = data.orchestrator_plan.workflow;
+                document.getElementById('res_reasoning').innerText = data.orchestrator_plan.reasoning;
+                document.getElementById('res_plan_conf').innerText = data.orchestrator_plan.confidence;
+
+                // Executive Report
+                document.getElementById('res_executive_summary').innerText = data.report.executive_summary;
+                
+                const kfList = document.getElementById('res_key_findings');
+                kfList.innerHTML = '';
+                (data.report.key_findings || []).forEach(f => {
+                    const li = document.createElement('li');
+                    li.innerText = f;
+                    kfList.appendChild(li);
+                });
+
+                document.getElementById('res_spatial_impact').innerText = data.report.spatial_impact;
+                document.getElementById('res_confidence_assessment').innerText = data.report.confidence_assessment;
+
+                const recList = document.getElementById('res_recommendations');
+                recList.innerHTML = '';
+                (data.report.recommendations || []).forEach(r => {
+                    const li = document.createElement('li');
+                    li.innerText = r;
+                    recList.appendChild(li);
+                });
+
+                // Specialist Analysis
+                document.getElementById('res_specialist_summary').innerHTML = '<p><b>Summary:</b> ' + (data.analysis.summary || 'Completed') + '</p>';
+
+                const detContainer = document.getElementById('res_detections_list');
+                detContainer.innerHTML = '';
+                const regions = data.analysis.change_regions || data.analysis.findings || [];
+                if (regions.length > 0) {
+                    const ol = document.createElement('ol');
+                    regions.forEach(reg => {
+                        const li = document.createElement('li');
+                        li.innerHTML = '<b>' + (reg.change_type || reg.label) + '</b> (Confidence: ' + reg.confidence + ')<br>' +
+                                       '<i>' + (reg.description || '') + '</i><br>' +
+                                       (reg.before_state ? '<b>Before:</b> ' + reg.before_state + ' | <b>After:</b> ' + reg.after_state + '<br>' : '') +
+                                       (reg.pixel_bbox ? '<b>Pixel Box:</b> [' + reg.pixel_bbox.col_min + ', ' + reg.pixel_bbox.row_min + ', ' + reg.pixel_bbox.col_max + ', ' + reg.pixel_bbox.row_max + ']' : '');
+                        ol.appendChild(li);
+                    });
+                    detContainer.appendChild(ol);
+                }
+
+                // GeoJSON
+                document.getElementById('res_geojson').innerText = JSON.stringify(data.visualization, null, 2);
+
+                // Metadata
+                document.getElementById('res_metadata').innerText = JSON.stringify(data.metadata, null, 2);
+
+                // Trace
+                const traceBody = document.getElementById('res_trace_body');
+                traceBody.innerHTML = '';
+                (data.execution_trace || []).forEach(t => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = '<td>' + t.step + '</td><td>' + t.agent + '</td><td>' + t.status + '</td><td>' + t.duration_ms + '</td>';
+                    traceBody.appendChild(row);
+                });
+
+                // Raw JSON
+                document.getElementById('res_raw_json').innerText = JSON.stringify(data, null, 2);
+
+                results.style.display = 'block';
+
+            } catch (err) {
+                alert('Request failed: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                loading.style.display = 'none';
+            }
+        }
+
+        // Initialize on load
+        checkHealth();
+    </script>
+</body>
+</html>

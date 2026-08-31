@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+.pytest_cache/
+
+# Environment secrets
+.env
+satquery_backend/.env
+!.env.example
+!satquery_backend/.env.example
+
+# Temporary and local storage
+satquery_backend/storage/uploads/*
+!satquery_backend/storage/uploads/.gitkeep
+satquery_backend/storage/previews/*
+!satquery_backend/storage/previews/.gitkeep
+satquery_backend/storage/*.db
+storage/uploads/*
+storage/previews/*
+storage/*.db
+
+# OS
+.DS_Store
