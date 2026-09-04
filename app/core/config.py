@@ -21,9 +21,9 @@ class Settings(BaseSettings):
 
     # Security
     secret_key: str = "change-me-in-production"
-    allowed_origins: list[str] = ["http://localhost:3000"]
+    allowed_origins: list[str] | str = ["http://localhost:3000"]
 
-    @field_validator("allowed_origins", mode="before")
+    @field_validator("allowed_origins", mode="after")
     @classmethod
     def parse_origins(cls, v: str | list) -> list[str]:
         if isinstance(v, str):
@@ -38,9 +38,9 @@ class Settings(BaseSettings):
 
     # Upload limits
     max_upload_size_mb: int = 500
-    allowed_image_formats: list[str] = ["tif", "tiff", "jp2", "img", "hdf5", "nc", "png", "jpg", "jpeg"]
+    allowed_image_formats: list[str] | str = ["tif", "tiff", "jp2", "img", "hdf5", "nc", "png", "jpg", "jpeg"]
 
-    @field_validator("allowed_image_formats", mode="before")
+    @field_validator("allowed_image_formats", mode="after")
     @classmethod
     def parse_formats(cls, v: str | list) -> list[str]:
         if isinstance(v, str):
@@ -63,6 +63,13 @@ class Settings(BaseSettings):
     openai_api_key: str = "PLACEHOLDER_API_KEY_TO_BE_PROVIDED"
     google_api_key: str = ""
     ollama_base_url: str = "http://localhost:11434"
+
+    # ── GEMINI VLM (Specialist Agents) ────────────────────────────────────────
+    # Used by GeminiVisionClient in app/ai/gemini_client.py for image analysis.
+    # If not set, the client operates in offline/heuristic mode automatically.
+    # ──────────────────────────────────────────────────────────────────────────
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
 
 
 @lru_cache

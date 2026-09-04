@@ -51,6 +51,11 @@ geopandas==1.0.1
 shapely==2.0.6
 pyproj==3.6.1
 fiona==1.10.1
+affine==2.4.0
+
+# Gemini VLM (Specialist Agents — Option A integration from satquery_backend)
+# If GEMINI_API_KEY is not set, GeminiVisionClient runs in offline/heuristic mode.
+google-genai>=1.4.0
 
 # Logging & Observability
 structlog==24.4.0
