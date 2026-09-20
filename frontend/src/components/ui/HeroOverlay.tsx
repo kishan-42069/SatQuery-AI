@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useState } from "react";
 
-import QueryDemo from "./QueryDemo";
 import SceneHUD from "./SceneHUD";
 import ThemeControls from "./ThemeControls";
 
@@ -127,8 +126,8 @@ export default function HeroOverlay() {
           <button
             type="button"
             onClick={() => exitTo("/model-demo")}
-            title="Interactive demonstration of the fine-tuned PaliGemma 3B satellite model"
-            className="pointer-events-auto flex items-center gap-1.5 rounded-full border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 text-[13px] font-semibold text-cyan-400 hover:bg-cyan-500/20 transition-all duration-200 active:scale-95 shadow-sm"
+            title="Interactive demonstration of change detection"
+            className="pointer-events-auto flex items-center gap-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 text-[13px] font-semibold text-cyan-400 hover:bg-cyan-500/20 transition-all duration-200 active:scale-95 shadow-sm"
             style={{
               fontFamily: "var(--font-grotesk-display)",
             }}
@@ -137,15 +136,15 @@ export default function HeroOverlay() {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500" />
             </span>
-            <span>Model Demo</span>
+            <span>Demo</span>
           </button>
 
           <button
             type="button"
             onClick={loadExampleProject}
             disabled={seeding}
-            title="Load real MODIS Terra imagery of Bengaluru East — 2019 against 2024 urban expansion"
-            className="pointer-events-auto hidden cursor-pointer rounded-full border px-4 py-2 text-[13px] transition-colors duration-200 disabled:cursor-wait disabled:opacity-70 sm:block"
+            title="Load real satellite imagery for comparison"
+            className="pointer-events-auto hidden cursor-pointer rounded-lg border px-4 py-2 text-[13px] transition-colors duration-200 disabled:cursor-wait disabled:opacity-70 sm:block"
             style={{
               fontFamily: "var(--font-grotesk-display)",
               borderColor: "var(--control-border)",
@@ -163,7 +162,7 @@ export default function HeroOverlay() {
               event.preventDefault();
               exitTo("/analyze");
             }}
-            className="pointer-events-auto cursor-pointer rounded-full px-5 py-2.5 text-[13px] font-medium transition-[filter,transform] duration-200 hover:brightness-110 active:scale-[0.98]"
+            className="pointer-events-auto cursor-pointer rounded-lg px-5 py-2.5 text-[13px] font-medium transition-[filter,transform] duration-200 hover:brightness-110 active:scale-[0.98]"
             style={{
               fontFamily: "var(--font-grotesk-display)",
               background:
@@ -239,15 +238,9 @@ export default function HeroOverlay() {
             fontFamily: "var(--font-grotesk-display)",
           }}
         >
-          Ask in plain language. SatQuery plans the question, routes it to
-          specialist models, and answers with the imagery it used.
+          Ask questions about satellite imagery in plain language. SatQuery AI analyzes scenes,
+          compares changes, and returns evidence you can review.
         </p>
-
-        {/* The search bar is the product, so it takes the place the
-            reference gives a sign-up button. */}
-        <div className="pointer-events-auto mt-9 w-full max-w-2xl">
-          <QueryDemo />
-        </div>
 
         {/* Says the page keeps going. Without it a full-bleed first screen
             reads as the whole site. */}

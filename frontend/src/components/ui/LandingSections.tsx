@@ -11,31 +11,31 @@ import { useRouter } from "next/navigation";
  * page reading as one continuous place rather than a second screen.
  */
 
-/** What the system actually does, in the order it does it. */
+/** How SatQuery works: the three core steps. */
 const PIPELINE = [
   {
     step: "01",
-    title: "Plan",
-    body: "A question in plain language is decomposed into the steps that answer it — which scenes, which window in time, which comparison.",
+    title: "Understand",
+    body: "SatQuery understands your question and identifies what needs to be analyzed.",
   },
   {
     step: "02",
-    title: "Route",
-    body: "Each step goes to the model built for it: change detection, land-cover segmentation, object counting, or a vision-language read of the scene.",
+    title: "Analyze",
+    body: "It selects the right satellite imagery and analysis methods.",
   },
   {
     step: "03",
-    title: "Ground",
-    body: "Every claim comes back attached to the imagery and the model that produced it, so an answer can be checked rather than taken on trust.",
+    title: "Explain",
+    body: "You get a clear result backed by the imagery used for the analysis.",
   },
 ];
 
 /** The capabilities worth naming on a landing page. */
 const CAPABILITIES = [
-  { label: "Change over time", detail: "Two dates, one scene, what moved." },
-  { label: "Land cover", detail: "Segmented and quantified by class." },
-  { label: "Object counts", detail: "Vessels, aircraft, structures, plots." },
-  { label: "Scene search", detail: "Find the imagery worth looking at." },
+  { label: "Change over time", detail: "See what changed between two dates." },
+  { label: "Land cover", detail: "Understand how land use has changed." },
+  { label: "Object detection", detail: "Identify and count relevant objects in a scene." },
+  { label: "Scene analysis", detail: "Explore what is visible in satellite imagery." },
 ];
 
 export default function LandingSections() {
@@ -45,7 +45,7 @@ export default function LandingSections() {
     <div className="relative z-10">
       {/* ── Pipeline ──────────────────────────────────────────────────── */}
       <section className="mx-auto max-w-6xl px-6 pb-24 pt-16 sm:px-10">
-        <SectionLabel>How an answer gets made</SectionLabel>
+        <SectionLabel>How SatQuery AI works</SectionLabel>
 
         <div className="mt-10 grid gap-4 md:grid-cols-3">
           {PIPELINE.map((item) => (
@@ -85,7 +85,7 @@ export default function LandingSections() {
 
       {/* ── Capabilities ──────────────────────────────────────────────── */}
       <section className="mx-auto max-w-6xl px-6 pb-28 sm:px-10">
-        <SectionLabel>What you can ask it</SectionLabel>
+        <SectionLabel>What can SatQuery AI help you explore?</SectionLabel>
 
         <div className="mt-10 grid gap-px overflow-hidden rounded-2xl border sm:grid-cols-2 lg:grid-cols-4"
           style={{ borderColor: "var(--hairline)", background: "var(--hairline)" }}
@@ -131,8 +131,7 @@ export default function LandingSections() {
           className="mx-auto mt-5 max-w-md text-pretty text-sm leading-relaxed sm:text-base"
           style={{ color: "var(--ink-muted)" }}
         >
-          The workspace is where the imagery, the agent trace and the evidence
-          all land together.
+          Upload imagery, ask questions, and review the analysis with evidence backed by satellite data.
         </p>
 
         {/*
@@ -144,7 +143,7 @@ export default function LandingSections() {
         <button
           type="button"
           onClick={() => router.push("/analyze")}
-          className="mt-10 cursor-pointer rounded-full px-8 py-4 text-[15px] font-medium transition-[filter,transform] duration-200 hover:brightness-110 active:scale-[0.98]"
+          className="mt-10 cursor-pointer rounded-lg px-8 py-4 text-[15px] font-medium transition-[filter,transform] duration-200 hover:brightness-110 active:scale-[0.98]"
           style={{
             fontFamily: "var(--font-grotesk-display)",
             background:
@@ -152,22 +151,9 @@ export default function LandingSections() {
             color: "var(--background)",
           }}
         >
-          Open the workspace →
+          Open workspace →
         </button>
       </section>
-
-      {/* ── Status strip ──────────────────────────────────────────────── */}
-      <footer
-        className="flex flex-wrap items-center justify-between gap-2 border-t px-6 py-4 font-mono text-[10px] backdrop-blur-md sm:px-10"
-        style={{
-          borderColor: "var(--hairline)",
-          background: "var(--footer-wash)",
-          color: "var(--ink-faint)",
-        }}
-      >
-        <span>EVIDENCE-GROUNDED · MODEL PROVENANCE EXPOSED</span>
-        <span>SIH 2026 · SIH26167 · SPACE TECHNOLOGY</span>
-      </footer>
     </div>
   );
 }

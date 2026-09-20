@@ -241,13 +241,9 @@ export default function ModelDemoPage() {
           <span className="text-sm font-medium">Model Demo</span>
         </div>
         <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 font-mono text-[11px] text-emerald-400">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" /> TRAINED &amp; LIVE
-          </span>
-          <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 font-mono text-[11px] text-cyan-400">4-bit QLoRA</span>
           <Link
             href="/analyze"
-            className="rounded-full px-4 py-1.5 text-xs font-medium transition-all hover:brightness-110"
+            className="rounded-lg px-4 py-1.5 text-xs font-medium transition-all hover:brightness-110"
             style={{ background: "linear-gradient(120deg, var(--accent), color-mix(in srgb, var(--accent) 55%, var(--accent-warm)))", color: "var(--background)" }}
           >
             Open Workspace →
@@ -263,11 +259,6 @@ export default function ModelDemoPage() {
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col sm:flex-row sm:items-end gap-4 justify-between">
             <div>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="rounded border border-violet-500/30 bg-violet-500/10 px-2.5 py-0.5 font-mono text-[10px] text-violet-400 uppercase tracking-wider">
-                  SIH 2024 Problem Statement
-                </span>
-              </div>
               <h1 className="text-3xl font-bold tracking-tight" style={{ fontFamily: "var(--font-grotesk-display)" }}>
                 Satellite Image{" "}
                 <span style={{ background: "linear-gradient(100deg, var(--accent), var(--accent-warm))", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>
@@ -275,9 +266,7 @@ export default function ModelDemoPage() {
                 </span>
               </h1>
               <p className="mt-1 text-sm max-w-2xl" style={{ color: "var(--ink-muted)" }}>
-                Given two satellite images of the <strong>same location</strong> at different times,
-                the model identifies <strong>what changed</strong> — urban expansion, deforestation,
-                water body shifts, infrastructure growth.
+                Compare satellite images captured at different points in time to identify meaningful changes in the same geographic area.
               </p>
             </div>
           </div>
