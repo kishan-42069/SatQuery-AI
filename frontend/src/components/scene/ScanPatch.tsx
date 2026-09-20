@@ -11,7 +11,11 @@ import { useEarthTextures } from "@/hooks/useEarthTextures";
 import { earthMeshRef } from "@/lib/earthMeshRef";
 import { noiseGLSL } from "@/lib/shaders/noise.glsl";
 
-const PATCH_SIZE = 0.34;
+// Full-width footprint. It spans a wide arc, so it reaches the limb often —
+// that is fine and intended: the shader clips it to the visible hemisphere
+// (see the facing test in patchFragment), so it can never draw past the
+// silhouette the way it used to. Shrinking it is not the fix for that.
+const PATCH_SIZE = 0.62;
 const SURFACE_OFFSET = 1.004;
 
 /**
