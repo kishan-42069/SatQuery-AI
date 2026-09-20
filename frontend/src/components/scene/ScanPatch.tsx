@@ -74,6 +74,15 @@ const _v = new THREE.Vector3();
 const ORIGIN = new THREE.Vector3(0, 0, 0);
 
 /**
+ * How far the footprint's centre may sit from the direction the camera is
+ * looking down. The patch spans roughly +/-17 degrees, so capping the centre
+ * at 50 keeps its far edge inside ~67 degrees — comfortably short of the
+ * 90-degree limb, which is what guarantees the square reads whole at every
+ * point in the orbit instead of only when the satellite is face-on.
+ */
+const MAX_VIEW_ANGLE = THREE.MathUtils.degToRad(50);
+
+/**
  * How squarely a point on the patch faces the camera: >0 on the visible
  * hemisphere, <=0 once it has wrapped around the limb onto the far side.
  *
@@ -411,6 +420,7 @@ export default function ScanPatch() {
   const worldDir = useMemo(() => new THREE.Vector3(), []);
   const localDir = useMemo(() => new THREE.Vector3(), []);
   const invMatrix = useMemo(() => new THREE.Matrix4(), []);
+  const camLocal = useMemo(() => new THREE.Vector3(), []);
 
   const uniforms = useMemo(
     () => ({
@@ -461,6 +471,7 @@ export default function ScanPatch() {
 
   useFrame((clock, delta) => {
     const t = clock.clock.elapsedTime;
+    const camera = clock.camera;
 
     if (matRef.current) {
       const u = matRef.current.uniforms;
@@ -483,8 +494,38 @@ export default function ScanPatch() {
 
     // Keep the patch pinned beneath the satellite, lying flat on the surface.
     satellitePositionAt(t, scratch);
-    scratch.normalize().multiplyScalar(SURFACE_OFFSET);
+    scratch.normalize();
+
     if (groupRef.current) {
+      // The footprint spans a wide arc, so following the sub-satellite point
+      // literally means that for much of the orbit half of it is round the
+      // back of the planet and gets clipped — the scan only ever looked
+      // whole when the satellite happened to be face-on. Lean the centre
+      // toward the viewer so the entire square stays on the near face.
+      //
+      // The satellite still leads it; this only caps how far it may trail
+      // off toward the limb.
+      const parent = groupRef.current.parent;
+      if (parent) {
+        parent.updateWorldMatrix(true, false);
+        camLocal.copy(camera.position);
+        parent.worldToLocal(camLocal).normalize();
+
+        const cos = THREE.MathUtils.clamp(scratch.dot(camLocal), -1, 1);
+        const angle = Math.acos(cos);
+        if (angle > MAX_VIEW_ANGLE && angle > 1e-4) {
+          // Slerp the direction back toward the camera until it sits exactly
+          // at the cap, so the motion stays smooth rather than snapping.
+          const k = MAX_VIEW_ANGLE / angle;
+          const sin = Math.sin(angle);
+          scratch
+            .multiplyScalar(Math.sin(k * angle) / sin)
+            .addScaledVector(camLocal, Math.sin((1 - k) * angle) / sin)
+            .normalize();
+        }
+      }
+
+      scratch.multiplyScalar(SURFACE_OFFSET);
       groupRef.current.position.copy(scratch);
       groupRef.current.lookAt(0, 0, 0);
       groupRef.current.rotateY(Math.PI);
