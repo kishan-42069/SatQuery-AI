@@ -100,7 +100,9 @@ const VQA_PROMPTS = [
 
 /* ─── Component ──────────────────────────────────────────────────── */
 export default function ModelDemoPage() {
-  const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null);
+  // Fetched on mount and kept for the API surface; the page no longer
+  // renders training telemetry, so nothing reads it today.
+  const [, setModelInfo] = useState<ModelInfo | null>(null);
 
   // Mode: "change" = demo tiles, "upload" = user files, "vqa" = single-image
   const [mode, setMode] = useState<"change" | "upload" | "vqa">("change");
@@ -251,7 +253,7 @@ export default function ModelDemoPage() {
         </div>
       </header>
 
-      {/* ── Hero: SIH Goal + Metrics ── */}
+      {/* ── Hero ── */}
       <div
         className="px-6 py-7 border-b"
         style={{ borderColor: "var(--rule-hairline)", background: "linear-gradient(135deg, color-mix(in srgb, var(--accent) 5%, var(--surface)), var(--surface))" }}
@@ -271,23 +273,6 @@ export default function ModelDemoPage() {
             </div>
           </div>
 
-          {/* Metrics strip */}
-          <div className="mt-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            {[
-              { label: "Base Model", value: "PaliGemma 3B", sub: "Fine-tuned VLM" },
-              { label: "Method", value: "4-bit QLoRA", sub: "LoRA r=16, α=32" },
-              { label: "Dataset", value: modelInfo?.dataset ?? "BigEarthNet", sub: "Sentinel-2" },
-              { label: "Steps", value: (modelInfo?.total_steps ?? 4689).toLocaleString(), sub: `${modelInfo?.epochs ?? 3} epochs` },
-              { label: "Train Loss", value: (modelInfo?.final_train_loss ?? 0.1576).toFixed(4), sub: `Eval: ${(modelInfo?.best_eval_loss ?? 0.1583).toFixed(4)}`, green: true },
-              { label: "Train Samples", value: ((modelInfo?.train_samples ?? 25000) / 1000).toFixed(0) + "k", sub: "tiles" },
-            ].map((m) => (
-              <div key={m.label} className="rounded-xl border p-3" style={{ borderColor: "var(--rule-hairline)", background: "var(--surface-sunken)" }}>
-                <div className="font-mono text-[10px] uppercase tracking-wider" style={{ color: "var(--ink-muted)" }}>{m.label}</div>
-                <div className="mt-1 text-base font-bold" style={{ color: (m as any).green ? "rgb(52 211 153)" : "var(--ink-primary)" }}>{m.value}</div>
-                <div className="text-[10px] truncate" style={{ color: "var(--ink-faint)" }}>{m.sub}</div>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
 
@@ -623,7 +608,7 @@ export default function ModelDemoPage() {
                     <div className="text-3xl mb-2">📤</div>
                     <p className="text-sm font-medium mb-1">T1 (Before) Image</p>
                     <p className="text-xs text-[var(--ink-muted)] mb-3">Drag & drop or click to upload</p>
-                    <button onClick={() => t1InputRef.current?.click()} className="rounded-full bg-[var(--surface)] border border-[var(--rule-hairline)] px-4 py-1.5 text-xs hover:border-[var(--ink-muted)]">Select File</button>
+                    <button onClick={() => t1InputRef.current?.click()} className="rounded-lg bg-[var(--surface)] border border-[var(--rule-hairline)] px-4 py-1.5 text-xs hover:border-[var(--ink-muted)]">Select File</button>
                   </div>
                 )}
               </div>
@@ -655,7 +640,7 @@ export default function ModelDemoPage() {
                     <div className="text-3xl mb-2">📤</div>
                     <p className="text-sm font-medium mb-1">T2 (After) Image</p>
                     <p className="text-xs text-[var(--ink-muted)] mb-3">Drag & drop or click to upload</p>
-                    <button onClick={() => t2InputRef.current?.click()} className="rounded-full bg-[var(--surface)] border border-[var(--rule-hairline)] px-4 py-1.5 text-xs hover:border-[var(--ink-muted)]">Select File</button>
+                    <button onClick={() => t2InputRef.current?.click()} className="rounded-lg bg-[var(--surface)] border border-[var(--rule-hairline)] px-4 py-1.5 text-xs hover:border-[var(--ink-muted)]">Select File</button>
                   </div>
                 )}
               </div>
@@ -851,7 +836,7 @@ export default function ModelDemoPage() {
                 <div className="flex flex-wrap gap-1.5 mb-4">
                   {VQA_PROMPTS.map((q, i) => (
                     <button key={i} onClick={() => runVqa(q)}
-                      className="rounded-full border px-3 py-1 text-[11px] transition-all hover:scale-[1.02] active:scale-95 text-left"
+                      className="rounded-lg border px-3 py-1 text-[11px] transition-all hover:scale-[1.02] active:scale-95 text-left"
                       style={{ borderColor: vqaPrompt === q ? "var(--accent)" : "var(--rule-hairline)", background: vqaPrompt === q ? "color-mix(in srgb, var(--accent) 12%, var(--surface-sunken))" : "var(--surface-sunken)", color: vqaPrompt === q ? "var(--accent)" : "var(--ink-muted)" }}>
                       {q}
                     </button>
@@ -866,13 +851,13 @@ export default function ModelDemoPage() {
                 <button onClick={() => runVqa()} disabled={vqaRunning || !vqaPrompt.trim()}
                   className="mt-3 w-full rounded-xl py-3 text-sm font-semibold flex items-center justify-center gap-2 transition-all hover:brightness-110 disabled:opacity-60 disabled:cursor-not-allowed"
                   style={{ background: "linear-gradient(120deg, var(--accent), color-mix(in srgb, var(--accent) 55%, var(--accent-warm)))", color: "var(--background)" }}>
-                  {vqaRunning ? <><span className="h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin" />Running…</> : <>⚡ Run VQA Inference</>}
+                  {vqaRunning ? <><span className="h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin" />Running…</> : <>Ask SatQuery AI</>}
                 </button>
               </div>
 
               <div className="flex-1 rounded-2xl border flex flex-col" style={{ borderColor: "var(--rule-hairline)", background: "var(--surface)", minHeight: "200px" }}>
                 <div className="flex items-center justify-between px-5 py-3 border-b" style={{ borderColor: "var(--rule-hairline)" }}>
-                  <span className="font-mono text-[11px] font-semibold uppercase tracking-wider">Model Output</span>
+                  <span className="font-mono text-[11px] font-semibold uppercase tracking-wider">Answer</span>
                   {vqaResult && <span className="rounded bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 font-mono text-[10px] text-emerald-400">⚡ {vqaResult.latency_ms.toFixed(0)} ms</span>}
                 </div>
                 <div className="flex-1 p-5 overflow-y-auto">
@@ -907,10 +892,6 @@ export default function ModelDemoPage() {
         )}
       </div>
 
-      <footer className="border-t px-6 py-4 flex items-center justify-between text-xs" style={{ borderColor: "var(--rule-hairline)", color: "var(--ink-faint)" }}>
-        <span>SatQuery AI · Fine-tuned PaliGemma 3B · <span className="font-mono">Train loss 0.1576 · Eval loss 0.1583</span></span>
-        <Link href="/analyze" className="hover:underline" style={{ color: "var(--ink-muted)" }}>Open full analysis workspace →</Link>
-      </footer>
     </div>
   );
 }

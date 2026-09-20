@@ -110,7 +110,7 @@ export default function HeroOverlay() {
                 event.preventDefault();
                 exitTo(item.href);
               }}
-              className="cursor-pointer rounded-full px-3.5 py-2 text-[13px] transition-colors duration-200 hover:text-[var(--ink-primary)]"
+              className="cursor-pointer rounded-lg px-3.5 py-2 text-[13px] transition-colors duration-200 hover:text-[var(--ink-primary)]"
               style={{
                 color: "var(--ink-muted)",
                 fontFamily: "var(--font-grotesk-display)",
