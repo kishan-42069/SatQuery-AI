@@ -143,7 +143,7 @@ export default function LandingSections() {
         <button
           type="button"
           onClick={() => router.push("/analyze")}
-          className="mt-10 cursor-pointer rounded-md px-8 py-4 text-[15px] font-medium transition-[filter,transform] duration-200 hover:brightness-110 active:scale-[0.98]"
+          className="mt-10 cursor-pointer rounded-lg px-8 py-4 text-[15px] font-medium transition-[filter,transform] duration-200 hover:brightness-110 active:scale-[0.98]"
           style={{
             fontFamily: "var(--font-grotesk-display)",
             background:
