@@ -132,10 +132,6 @@ export default function HeroOverlay() {
               fontFamily: "var(--font-grotesk-display)",
             }}
           >
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500" />
-            </span>
             <span>Demo</span>
           </button>
 
@@ -241,18 +237,6 @@ export default function HeroOverlay() {
           Ask questions about satellite imagery in plain language. SatQuery AI analyzes scenes,
           compares changes, and returns evidence you can review.
         </p>
-
-        {/* Says the page keeps going. Without it a full-bleed first screen
-            reads as the whole site. */}
-        <div
-          className="pointer-events-none absolute inset-x-0 bottom-9 flex flex-col items-center gap-2"
-          style={{ color: "var(--ink-faint)" }}
-        >
-          <span className="font-mono text-[10px] uppercase tracking-[0.18em]">
-            Scroll
-          </span>
-          <span className="h-8 w-px animate-pulse bg-[currentColor]" />
-        </div>
 
         <SceneHUD />
       </section>

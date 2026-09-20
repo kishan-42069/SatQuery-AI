@@ -281,9 +281,9 @@ export default function ModelDemoPage() {
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex gap-0">
             {([
-              { id: "change", label: "🛰️  Demo: Change Detection", badge: "DEMO" },
-              { id: "upload", label: "📤  Upload Your Images",     badge: "YOUR DATA" },
-              { id: "vqa",    label: "🔍  Single Image VQA",       badge: null },
+              { id: "change", label: "Demo: Change Detection" },
+              { id: "upload", label: "Upload Your Images" },
+              { id: "vqa",    label: "Single Image" },
             ] as const).map((tab) => (
               <button
                 key={tab.id}
@@ -295,13 +295,6 @@ export default function ModelDemoPage() {
                 }}
               >
                 {tab.label}
-                {tab.badge && (
-                  <span className={`rounded px-1.5 py-0.5 font-mono text-[9px] border ${
-                    tab.id === "upload"
-                      ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
-                      : "bg-violet-500/15 border-violet-500/30 text-violet-400"
-                  }`}>{tab.badge}</span>
-                )}
               </button>
             ))}
           </div>
@@ -326,7 +319,7 @@ export default function ModelDemoPage() {
                   style={{ background: "var(--surface-sunken)", borderBottom: "1px solid var(--rule-hairline)" }}
                 >
                   <div className="flex items-center gap-2">
-                    <span className="rounded bg-blue-500/15 border border-blue-500/30 px-2 py-0.5 font-mono text-[10px] text-blue-400 font-semibold">T1 · BEFORE</span>
+                    <span className="font-mono text-[10px] font-semibold text-blue-400">Before</span>
                     <span className="text-xs font-medium" style={{ color: "var(--ink-primary)" }}>{t1.label}</span>
                   </div>
                   <span className="font-mono text-[10px]" style={{ color: "var(--ink-faint)" }}>{t1.modality} · {t1.date}</span>
@@ -356,8 +349,8 @@ export default function ModelDemoPage() {
                 {/* Main image */}
                 <div className="relative aspect-[4/3] w-full">
                   <Image src={t1.image} alt={t1.label} fill className="object-cover" sizes="600px" />
-                  <div className="absolute top-2 left-2 rounded bg-blue-600/80 px-2 py-0.5 font-mono text-[11px] text-white font-bold backdrop-blur-sm">
-                    T1 · {t1.date}
+                  <div className="absolute top-2 left-2 font-mono text-[11px] font-bold text-white" style={{ textShadow: "0 1px 4px rgba(0,0,0,0.9)" }}>
+                    {t1.date}
                   </div>
                 </div>
               </div>
@@ -369,7 +362,7 @@ export default function ModelDemoPage() {
                   style={{ background: "var(--surface-sunken)", borderBottom: "1px solid var(--rule-hairline)" }}
                 >
                   <div className="flex items-center gap-2">
-                    <span className="rounded bg-orange-500/15 border border-orange-500/30 px-2 py-0.5 font-mono text-[10px] text-orange-400 font-semibold">T2 · AFTER</span>
+                    <span className="font-mono text-[10px] font-semibold text-orange-400">After</span>
                     <span className="text-xs font-medium" style={{ color: "var(--ink-primary)" }}>{t2.label}</span>
                   </div>
                   <span className="font-mono text-[10px]" style={{ color: "var(--ink-faint)" }}>{t2.modality} · {t2.date}</span>
@@ -399,8 +392,8 @@ export default function ModelDemoPage() {
                 {/* Main image */}
                 <div className="relative aspect-[4/3] w-full">
                   <Image src={t2.image} alt={t2.label} fill className="object-cover" sizes="600px" />
-                  <div className="absolute top-2 left-2 rounded bg-orange-600/80 px-2 py-0.5 font-mono text-[11px] text-white font-bold backdrop-blur-sm">
-                    T2 · {t2.date}
+                  <div className="absolute top-2 left-2 font-mono text-[11px] font-bold text-white" style={{ textShadow: "0 1px 4px rgba(0,0,0,0.9)" }}>
+                    {t2.date}
                   </div>
                 </div>
               </div>
@@ -456,7 +449,7 @@ export default function ModelDemoPage() {
                           {INTENSITY_BADGE[cdResult.change_intensity]?.label}
                         </span>
                         <span className="rounded bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 font-mono text-[10px] text-emerald-400">
-                          ⚡ {cdResult.latency_ms.toFixed(0)} ms
+                          {cdResult.latency_ms.toFixed(0)} ms
                         </span>
                       </>
                     )}
@@ -476,7 +469,7 @@ export default function ModelDemoPage() {
                       <div className="relative h-16 w-16">
                         <div className="absolute inset-0 rounded-full border-2 animate-spin" style={{ borderColor: "var(--accent) transparent transparent transparent" }} />
                         <div className="absolute inset-2 rounded-full border-2 animate-spin" style={{ borderColor: "color-mix(in srgb, var(--accent) 50%, transparent) transparent transparent transparent", animationDirection: "reverse", animationDuration: "0.8s" }} />
-                        <div className="absolute inset-0 flex items-center justify-center text-lg">🛰️</div>
+                        <div className="absolute inset-0 flex items-center justify-center text-lg"></div>
                       </div>
                       <div className="text-center">
                         <p className="font-mono text-xs" style={{ color: "var(--ink-muted)" }}>
@@ -560,7 +553,7 @@ export default function ModelDemoPage() {
             {/* Empty state */}
             {!cdResult && !cdRunning && !cdError && (
               <div className="rounded-2xl border flex flex-col items-center justify-center py-16 gap-4 text-center" style={{ borderColor: "var(--rule-hairline)", borderStyle: "dashed", background: "var(--surface-sunken)" }}>
-                <div className="text-4xl">🛰️</div>
+                <div className="text-4xl"></div>
                 <div>
                   <p className="text-sm font-medium" style={{ color: "var(--ink-primary)" }}>Ready for Change Detection</p>
                   <p className="mt-1 text-xs max-w-sm" style={{ color: "var(--ink-faint)" }}>
@@ -568,7 +561,7 @@ export default function ModelDemoPage() {
                   </p>
                 </div>
                 <p className="font-mono text-[10px] px-4 py-2 rounded-lg border" style={{ borderColor: "var(--rule-hairline)", color: "var(--ink-faint)", background: "var(--surface)" }}>
-                  💡 Try: T1 = ISRO 2022 vs T2 = ISRO 2026 — real urban expansion is visible!
+                  Try: T1 = ISRO 2022 vs T2 = ISRO 2026 — real urban expansion is visible!
                 </p>
               </div>
             )}
@@ -599,13 +592,13 @@ export default function ModelDemoPage() {
                   <div className="w-full h-full flex flex-col items-center gap-3">
                     <div className="relative aspect-[4/3] w-full rounded-lg overflow-hidden border border-[var(--rule-hairline)]">
                       <Image src={upT1Preview} alt="T1 Preview" fill className="object-cover" />
-                      <div className="absolute top-2 left-2 rounded bg-blue-600/80 px-2 py-0.5 font-mono text-[11px] text-white font-bold backdrop-blur-sm">T1 · BEFORE</div>
+                      <div className="absolute top-2 left-2 font-mono text-[11px] font-bold text-white" style={{ textShadow: "0 1px 4px rgba(0,0,0,0.9)" }}>Before</div>
                     </div>
                     <button onClick={() => { setUpT1File(null); setUpT1Preview(null); }} className="text-xs text-red-400 hover:underline">Remove Image</button>
                   </div>
                 ) : (
                   <div className="text-center">
-                    <div className="text-3xl mb-2">📤</div>
+                    <div className="text-3xl mb-2"></div>
                     <p className="text-sm font-medium mb-1">T1 (Before) Image</p>
                     <p className="text-xs text-[var(--ink-muted)] mb-3">Drag & drop or click to upload</p>
                     <button onClick={() => t1InputRef.current?.click()} className="rounded-lg bg-[var(--surface)] border border-[var(--rule-hairline)] px-4 py-1.5 text-xs hover:border-[var(--ink-muted)]">Select File</button>
@@ -631,13 +624,13 @@ export default function ModelDemoPage() {
                   <div className="w-full h-full flex flex-col items-center gap-3">
                     <div className="relative aspect-[4/3] w-full rounded-lg overflow-hidden border border-[var(--rule-hairline)]">
                       <Image src={upT2Preview} alt="T2 Preview" fill className="object-cover" />
-                      <div className="absolute top-2 left-2 rounded bg-orange-600/80 px-2 py-0.5 font-mono text-[11px] text-white font-bold backdrop-blur-sm">T2 · AFTER</div>
+                      <div className="absolute top-2 left-2 font-mono text-[11px] font-bold text-white" style={{ textShadow: "0 1px 4px rgba(0,0,0,0.9)" }}>After</div>
                     </div>
                     <button onClick={() => { setUpT2File(null); setUpT2Preview(null); }} className="text-xs text-red-400 hover:underline">Remove Image</button>
                   </div>
                 ) : (
                   <div className="text-center">
-                    <div className="text-3xl mb-2">📤</div>
+                    <div className="text-3xl mb-2"></div>
                     <p className="text-sm font-medium mb-1">T2 (After) Image</p>
                     <p className="text-xs text-[var(--ink-muted)] mb-3">Drag & drop or click to upload</p>
                     <button onClick={() => t2InputRef.current?.click()} className="rounded-lg bg-[var(--surface)] border border-[var(--rule-hairline)] px-4 py-1.5 text-xs hover:border-[var(--ink-muted)]">Select File</button>
@@ -684,7 +677,7 @@ export default function ModelDemoPage() {
                           {INTENSITY_BADGE[upResult.change_intensity]?.label}
                         </span>
                         <span className="rounded bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 font-mono text-[10px] text-emerald-400">
-                          ⚡ {upResult.latency_ms.toFixed(0)} ms
+                          {upResult.latency_ms.toFixed(0)} ms
                         </span>
                       </>
                     )}
@@ -704,7 +697,7 @@ export default function ModelDemoPage() {
                       <div className="relative h-16 w-16">
                         <div className="absolute inset-0 rounded-full border-2 animate-spin" style={{ borderColor: "var(--accent) transparent transparent transparent" }} />
                         <div className="absolute inset-2 rounded-full border-2 animate-spin" style={{ borderColor: "color-mix(in srgb, var(--accent) 50%, transparent) transparent transparent transparent", animationDirection: "reverse", animationDuration: "0.8s" }} />
-                        <div className="absolute inset-0 flex items-center justify-center text-lg">🛰️</div>
+                        <div className="absolute inset-0 flex items-center justify-center text-lg"></div>
                       </div>
                       <div className="text-center">
                         <p className="font-mono text-xs" style={{ color: "var(--ink-muted)" }}>
@@ -858,7 +851,7 @@ export default function ModelDemoPage() {
               <div className="flex-1 rounded-2xl border flex flex-col" style={{ borderColor: "var(--rule-hairline)", background: "var(--surface)", minHeight: "200px" }}>
                 <div className="flex items-center justify-between px-5 py-3 border-b" style={{ borderColor: "var(--rule-hairline)" }}>
                   <span className="font-mono text-[11px] font-semibold uppercase tracking-wider">Answer</span>
-                  {vqaResult && <span className="rounded bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 font-mono text-[10px] text-emerald-400">⚡ {vqaResult.latency_ms.toFixed(0)} ms</span>}
+                  {vqaResult && <span className="rounded bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 font-mono text-[10px] text-emerald-400">{vqaResult.latency_ms.toFixed(0)} ms</span>}
                 </div>
                 <div className="flex-1 p-5 overflow-y-auto">
                   {vqaError && <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">{vqaError}</div>}

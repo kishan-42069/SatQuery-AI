@@ -282,7 +282,7 @@ export default function ModelDemoModal({
                 </span>
                 {result && (
                   <span className="rounded bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] text-emerald-500">
-                    ⚡ {result.latency_ms} ms
+                    {result.latency_ms} ms
                   </span>
                 )}
               </div>

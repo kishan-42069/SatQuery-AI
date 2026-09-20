@@ -15,6 +15,55 @@ const PATCH_SIZE = 0.62;
 const SURFACE_OFFSET = 1.004;
 
 /**
+ * The patch used to be a flat plane laid tangent to the globe. At this size
+ * that reads wrong: a tangent plane only touches the sphere at its centre,
+ * so the corners lift off the surface and the whole thing looks like a card
+ * hovering over the Earth rather than imagery painted onto it.
+ *
+ * So bend the plane onto the sphere. The group is positioned at
+ * SURFACE_OFFSET along the sub-satellite normal and turned to face the
+ * centre, which puts Earth's centre at local (0, 0, -SURFACE_OFFSET). Each
+ * vertex is re-projected onto the sphere of that radius about that centre,
+ * which leaves the centre vertex where it was and pulls the edges down into
+ * the curvature. planeGeometry's UVs survive untouched, so the shader's
+ * sampling and grid maths are unaffected.
+ */
+const patchGeometry = (() => {
+  const geo = new THREE.PlaneGeometry(PATCH_SIZE, PATCH_SIZE, 24, 24);
+  const pos = geo.attributes.position;
+  const R = SURFACE_OFFSET;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    const len = Math.sqrt(x * x + y * y + R * R);
+    pos.setXYZ(i, (R * x) / len, (R * y) / len, (R * R) / len - R);
+  }
+  pos.needsUpdate = true;
+  geo.computeVertexNormals();
+  return geo;
+})();
+
+/**
+ * Same projection as above, for the overlays drawn on top of the patch.
+ * Without this they stay on the old flat tangent plane and visibly float
+ * off the surface toward the patch edges, which is the exact artefact the
+ * curved geometry is there to remove. `lift` is a small outward nudge to
+ * keep lines from z-fighting the patch they sit on.
+ */
+function onSurface(x: number, y: number, lift = 0): THREE.Vector3 {
+  const R = SURFACE_OFFSET;
+  const len = Math.sqrt(x * x + y * y + R * R);
+  const r = R + lift;
+  return new THREE.Vector3((r * x) / len, (r * y) / len, (r * R) / len - R);
+}
+
+/** Outward normal at a tangent-plane coordinate, in the group's local frame. */
+function surfaceNormal(x: number, y: number): THREE.Vector3 {
+  const R = SURFACE_OFFSET;
+  return new THREE.Vector3(x, y, R).normalize();
+}
+
+/**
  * Detections shown on the scanned surface patch. The first two are always
  * visible (idle); the remaining ones snap in when a query runs — mirroring
  * the PRD's grounding workflow producing additional evidence regions.
@@ -176,8 +225,19 @@ function DetectionBox({
     }
   });
 
+  // Sit the box on the curved surface and tilt it to the local normal, so
+  // it lies on the imagery rather than hovering above it off-centre.
+  const { pos, quat } = useMemo(() => {
+    const p = onSurface(det.x, det.y, 0.002);
+    const q = new THREE.Quaternion().setFromUnitVectors(
+      new THREE.Vector3(0, 0, 1),
+      surfaceNormal(det.x, det.y),
+    );
+    return { pos: p, quat: q };
+  }, [det]);
+
   return (
-    <group ref={groupRef} position={[det.x, det.y, 0.002]}>
+    <group ref={groupRef} position={pos} quaternion={quat}>
       <primitive object={outline} />
       <Html
         position={[det.w / 2 + 0.012, det.h / 2, 0]}
@@ -228,9 +288,9 @@ function ReticleCorners() {
         const x = sx * half;
         const y = sy * half;
         const pts = [
-          new THREE.Vector3(x, y - sy * arm, 0.003),
-          new THREE.Vector3(x, y, 0.003),
-          new THREE.Vector3(x - sx * arm, y, 0.003),
+          onSurface(x, y - sy * arm, 0.003),
+          onSurface(x, y, 0.003),
+          onSurface(x - sx * arm, y, 0.003),
         ];
         const geo = new THREE.BufferGeometry().setFromPoints(pts);
         const mat = new THREE.LineBasicMaterial({
@@ -367,8 +427,7 @@ export default function ScanPatch() {
 
   return (
     <group ref={groupRef}>
-      <mesh>
-        <planeGeometry args={[PATCH_SIZE, PATCH_SIZE, 1, 1]} />
+      <mesh geometry={patchGeometry}>
         <shaderMaterial
           ref={matRef}
           vertexShader={patchVertex}
@@ -386,7 +445,7 @@ export default function ScanPatch() {
       {/* Real sensor readout — Cartosat-3's actual orbit and resolution,
           not placeholder numbers, so the "instrument" reads as grounded. */}
       <Html
-        position={[-PATCH_SIZE / 2.15, PATCH_SIZE / 2.15 + 0.05, 0]}
+        position={onSurface(-PATCH_SIZE / 2.15, PATCH_SIZE / 2.15 + 0.05, 0.01)}
         center={false}
         distanceFactor={1.15}
         zIndexRange={[3, 1]}
