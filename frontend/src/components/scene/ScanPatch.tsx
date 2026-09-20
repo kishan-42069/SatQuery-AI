@@ -6,113 +6,13 @@ import { useFrame } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import { palette } from "@/lib/theme";
 import { useSceneStore } from "@/hooks/useSceneStore";
-import { satellitePositionAt } from "./Satellite";
+import { satellitePositionAt, SATELLITE_SPECS } from "./Satellite";
 import { useEarthTextures } from "@/hooks/useEarthTextures";
 import { earthMeshRef } from "@/lib/earthMeshRef";
 import { noiseGLSL } from "@/lib/shaders/noise.glsl";
 
-// Full-width footprint. It spans a wide arc, so it reaches the limb often —
-// that is fine and intended: the shader clips it to the visible hemisphere
-// (see the facing test in patchFragment), so it can never draw past the
-// silhouette the way it used to. Shrinking it is not the fix for that.
 const PATCH_SIZE = 0.62;
 const SURFACE_OFFSET = 1.004;
-
-/**
- * The patch used to be a flat plane laid tangent to the globe. At this size
- * that reads wrong: a tangent plane only touches the sphere at its centre,
- * so the corners lift off the surface and the whole thing looks like a card
- * hovering over the Earth rather than imagery painted onto it.
- *
- * So bend the plane onto the sphere. The group is positioned at
- * SURFACE_OFFSET along the sub-satellite normal and turned to face the
- * centre, which puts Earth's centre at local (0, 0, -SURFACE_OFFSET). Each
- * vertex is re-projected onto the sphere of that radius about that centre,
- * which leaves the centre vertex where it was and pulls the edges down into
- * the curvature. planeGeometry's UVs survive untouched, so the shader's
- * sampling and grid maths are unaffected.
- */
-const patchGeometry = (() => {
-  const geo = new THREE.PlaneGeometry(PATCH_SIZE, PATCH_SIZE, 24, 24);
-  const pos = geo.attributes.position;
-  const R = SURFACE_OFFSET;
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i);
-    const y = pos.getY(i);
-    const len = Math.sqrt(x * x + y * y + R * R);
-    pos.setXYZ(i, (R * x) / len, (R * y) / len, (R * R) / len - R);
-  }
-  pos.needsUpdate = true;
-  geo.computeVertexNormals();
-  return geo;
-})();
-
-/**
- * Same projection as above, for the overlays drawn on top of the patch.
- * Without this they stay on the old flat tangent plane and visibly float
- * off the surface toward the patch edges, which is the exact artefact the
- * curved geometry is there to remove. `lift` is a small outward nudge to
- * keep lines from z-fighting the patch they sit on.
- */
-function onSurface(x: number, y: number, lift = 0): THREE.Vector3 {
-  const R = SURFACE_OFFSET;
-  const len = Math.sqrt(x * x + y * y + R * R);
-  const r = R + lift;
-  return new THREE.Vector3((r * x) / len, (r * y) / len, (r * R) / len - R);
-}
-
-/** Outward normal at a tangent-plane coordinate, in the group's local frame. */
-function surfaceNormal(x: number, y: number): THREE.Vector3 {
-  const R = SURFACE_OFFSET;
-  return new THREE.Vector3(x, y, R).normalize();
-}
-
-const _w = new THREE.Vector3();
-const _c = new THREE.Vector3();
-const _n = new THREE.Vector3();
-const _v = new THREE.Vector3();
-const ORIGIN = new THREE.Vector3(0, 0, 0);
-
-/**
- * How far the footprint's centre may sit from the direction the camera is
- * looking down. The patch spans roughly +/-17 degrees, so capping the centre
- * at 50 keeps its far edge inside ~67 degrees — comfortably short of the
- * 90-degree limb, which is what guarantees the square reads whole at every
- * point in the orbit instead of only when the satellite is face-on.
- */
-const MAX_VIEW_ANGLE = THREE.MathUtils.degToRad(50);
-
-/**
- * How squarely a point on the patch faces the camera: >0 on the visible
- * hemisphere, <=0 once it has wrapped around the limb onto the far side.
- *
- * The shader does this per-fragment, but the reticle and detection outlines
- * are lines and their captions are DOM, so neither can discard. Without this
- * they keep drawing past the silhouette — nothing occludes them there,
- * because Earth's atmosphere shell is transparent with depthWrite off.
- */
-function facingAmount(
-  obj: THREE.Object3D,
-  local: THREE.Vector3,
-  cameraPos: THREE.Vector3,
-): number {
-  _w.copy(local).applyMatrix4(obj.matrixWorld);
-  // Globe centre. Earth's mesh sits at the origin of GlobeSystem's inner
-  // group, so its world position IS the centre, whatever drag, travel scale
-  // or offset is stacked above it.
-  //
-  // This used to read obj.parent, which is only the globe centre for the
-  // patch group itself. The reticle lines and detection boxes are children
-  // OF that group, so their parent is a point ON the sphere — the normal
-  // came out as the difference between two nearby surface points, which is
-  // near-zero and points sideways. Their limb test was reading noise.
-  const earth = earthMeshRef.current;
-  if (earth) earth.getWorldPosition(_c);
-  else _c.set(0, 0, 0);
-  _n.copy(_w).sub(_c).normalize();
-  _v.copy(cameraPos).sub(_w).normalize();
-  return _n.dot(_v);
-}
 
 /**
  * Detections shown on the scanned surface patch. The first two are always
@@ -120,26 +20,18 @@ function facingAmount(
  * the PRD's grounding workflow producing additional evidence regions.
  */
 const DETECTIONS = [
-  { id: "d1", x: -0.22, y: 0.16, w: 0.26, h: 0.19, label: "built-up", conf: 0.94 },
-  { id: "d2", x: 0.19, y: -0.1, w: 0.22, h: 0.16, label: "water", conf: 0.87 },
-  { id: "d3", x: -0.08, y: -0.24, w: 0.19, h: 0.13, label: "vegetation", conf: 0.79 },
-  { id: "d4", x: 0.24, y: 0.23, w: 0.16, h: 0.14, label: "change", conf: 0.91 },
+  { id: "d1", x: -0.17, y: 0.11, w: 0.19, h: 0.13, label: "built-up", conf: 0.94 },
+  { id: "d2", x: 0.13, y: -0.06, w: 0.15, h: 0.11, label: "water", conf: 0.87 },
+  { id: "d3", x: -0.05, y: -0.19, w: 0.13, h: 0.09, label: "vegetation", conf: 0.79 },
+  { id: "d4", x: 0.19, y: 0.18, w: 0.11, h: 0.1, label: "change", conf: 0.91 },
 ] as const;
 
 const patchVertex = /* glsl */ `
   varying vec2 vUv;
-  varying vec3 vViewPos;
-  varying vec3 vViewNormal;
 
   void main() {
     vUv = uv;
-    // View space, not world: normalMatrix already folds in whatever scale
-    // GlobeSystem has applied, so the normal stays correct while the globe
-    // is being scaled through the hero travel.
-    vec4 mv = modelViewMatrix * vec4(position, 1.0);
-    vViewPos = mv.xyz;
-    vViewNormal = normalize(normalMatrix * normal);
-    gl_Position = projectionMatrix * mv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }
 `;
 
@@ -162,8 +54,6 @@ const patchFragment = /* glsl */ `
   uniform vec2 uSampleCenter;
   uniform vec2 uFootprint;
   varying vec2 vUv;
-  varying vec3 vViewPos;
-  varying vec3 vViewNormal;
 
   ${noiseGLSL}
 
@@ -177,23 +67,10 @@ const patchFragment = /* glsl */ `
   void main() {
     // radial falloff so the patch blends into the globe instead of
     // sitting on it as a hard-edged decal
-    // Camera sits at the origin in view space, so the view vector is just
-    // the negated fragment position. A fragment is on the near face when its
-    // outward normal still points back toward the camera.
-    float facing = dot(normalize(vViewNormal), normalize(-vViewPos));
-    if (facing <= 0.0) discard;
-    // Feather the last few degrees so the patch dissolves into the limb
-    // instead of being sheared off along a hard terminator line.
-    float limbFade = smoothstep(0.0, 0.05, facing);
-
     vec2 centered = vUv - 0.5;
     float dist = length(centered);
-    // 0 at the centre, 1 at any edge, >1 only outside — a square metric, so
-    // the corners survive instead of being cut off by a circular fade.
-    vec2 edges = abs(centered) * 2.0;
-    float edge = max(edges.x, edges.y);
-    float falloff = 1.0 - smoothstep(0.82, 1.0, edge);
-    if (falloff * limbFade <= 0.001) discard;
+    float falloff = 1.0 - smoothstep(0.30, 0.5, dist);
+    if (falloff <= 0.001) discard;
 
     vec3 base;
     if (uHasRealMap > 0.5) {
@@ -219,11 +96,6 @@ const patchFragment = /* glsl */ `
       base = mix(uTerrainLow, uTerrainHigh, smoothstep(0.35, 0.7, terrain));
     }
 
-    // Sensor wash. Keeps the underlying imagery readable through it while
-    // giving the footprint the density it needs to read as an instrument
-    // looking at the ground, not a wireframe laid over it.
-    base = mix(base, uGridColor, 0.46 + 0.12 * uActive);
-
     // GIS tiling grid — two tiers, like a real sensor's pixel/tile
     // overlay: a fine cell grid plus a heavier tile boundary every 4 cells,
     // rather than one uniform lattice.
@@ -236,13 +108,13 @@ const patchFragment = /* glsl */ `
     vec2 fineAA = max(fwidth(fine), vec2(1e-5));
     vec2 fineD = abs(fract(fine) - 0.5) / fineAA;
     float gridLine = 1.0 - smoothstep(0.0, 0.9, min(fineD.x, fineD.y));
-    base = mix(base, uGridColor, gridLine * (0.34 + 0.18 * uActive));
+    base = mix(base, uGridColor, gridLine * (0.16 + 0.14 * uActive));
 
     vec2 tile = vUv * 3.0;
     vec2 tileAA = max(fwidth(tile), vec2(1e-5));
     vec2 tileD = abs(fract(tile) - 0.5) / tileAA;
     float tileLine = 1.0 - smoothstep(0.0, 1.5, min(tileD.x, tileD.y));
-    base = mix(base, uGridColor, tileLine * (0.58 + 0.24 * uActive));
+    base = mix(base, uGridColor, tileLine * (0.32 + 0.22 * uActive));
 
     // scan sweep travelling across the patch, with a soft trailing fade
     // behind the leading edge so it reads as a moving beam, not a bar
@@ -259,7 +131,7 @@ const patchFragment = /* glsl */ `
     float ringLine = smoothstep(0.05, 0.0, abs(ring - 0.5)) * smoothstep(0.5, 0.0, dist);
     base += uGridColor * ringLine * (0.3 + 0.5 * uActive);
 
-    float alpha = falloff * limbFade * (0.93 + 0.07 * uActive);
+    float alpha = falloff * (0.86 + 0.14 * uActive);
     gl_FragColor = vec4(base, alpha);
   }
 `;
@@ -273,11 +145,9 @@ function DetectionBox({
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const scaleRef = useRef(0);
-  const labelRef = useRef<HTMLDivElement>(null);
 
   const outline = useMemo(() => {
-    const w = det.w * PATCH_SIZE;
-    const h = det.h * PATCH_SIZE;
+    const { w, h } = det;
     const pts = [
       new THREE.Vector3(-w / 2, -h / 2, 0),
       new THREE.Vector3(w / 2, -h / 2, 0),
@@ -294,56 +164,34 @@ function DetectionBox({
     return new THREE.Line(geo, mat);
   }, [det]);
 
-  useFrame(({ camera }, delta) => {
+  useFrame((_, delta) => {
     const target = visible ? 1 : 0;
     scaleRef.current += (target - scaleRef.current) * Math.min(delta * 6, 1);
-    const g = groupRef.current;
-    if (g) {
+    if (groupRef.current) {
       const s = scaleRef.current;
-      g.scale.setScalar(0.85 + s * 0.15);
-      // Local origin, because the group is already sitting at `pos`.
-      const facing = facingAmount(g, ORIGIN, camera.position);
-      const onNearFace = THREE.MathUtils.smoothstep(facing, 0.0, 0.05);
-      g.visible = s > 0.02 && onNearFace > 0.01;
+      groupRef.current.scale.setScalar(0.85 + s * 0.15);
+      groupRef.current.visible = s > 0.02;
       const mat = outline.material as THREE.LineBasicMaterial;
-      mat.opacity = s * 0.95 * onNearFace;
-      if (labelRef.current) {
-        labelRef.current.style.opacity = String(
-          (visible ? 1 : 0) * onNearFace,
-        );
-      }
+      mat.opacity = s * 0.95;
     }
   });
 
-  // Sit the box on the curved surface and tilt it to the local normal, so
-  // it lies on the imagery rather than hovering above it off-centre.
-  const { pos, quat } = useMemo(() => {
-    const dx = det.x * PATCH_SIZE;
-    const dy = det.y * PATCH_SIZE;
-    const p = onSurface(dx, dy, 0.002);
-    const q = new THREE.Quaternion().setFromUnitVectors(
-      new THREE.Vector3(0, 0, 1),
-      surfaceNormal(dx, dy),
-    );
-    return { pos: p, quat: q };
-  }, [det]);
-
   return (
-    <group ref={groupRef} position={pos} quaternion={quat}>
+    <group ref={groupRef} position={[det.x, det.y, 0.002]}>
       <primitive object={outline} />
       <Html
-        position={[(det.w * PATCH_SIZE) / 2 + 0.012, (det.h * PATCH_SIZE) / 2, 0]}
+        position={[det.w / 2 + 0.012, det.h / 2, 0]}
         center={false}
         distanceFactor={1.15}
         style={{ pointerEvents: "none" }}
         zIndexRange={[4, 1]}
       >
         <div
-          ref={labelRef}
           className="whitespace-nowrap font-mono text-[9px] tracking-wide"
           style={{
             color: det.conf > 0.9 ? palette.amberSoft : palette.cyanSoft,
-            opacity: 0,
+            opacity: visible ? 1 : 0,
+            transition: "opacity 300ms ease",
             textShadow: "0 0 6px rgba(0,0,0,0.9)",
           }}
         >
@@ -360,7 +208,7 @@ function DetectionBox({
  * plain square patch doesn't give.
  */
 function ReticleCorners() {
-  const half = PATCH_SIZE / 2.45;
+  const half = PATCH_SIZE / 2.15;
   const arm = PATCH_SIZE * 0.16;
 
   const corners = useMemo(
@@ -380,11 +228,10 @@ function ReticleCorners() {
         const x = sx * half;
         const y = sy * half;
         const pts = [
-          onSurface(x, y - sy * arm, 0.003),
-          onSurface(x, y, 0.003),
-          onSurface(x - sx * arm, y, 0.003),
+          new THREE.Vector3(x, y - sy * arm, 0.003),
+          new THREE.Vector3(x, y, 0.003),
+          new THREE.Vector3(x - sx * arm, y, 0.003),
         ];
-        const anchor = onSurface(x, y, 0.003);
         const geo = new THREE.BufferGeometry().setFromPoints(pts);
         const mat = new THREE.LineBasicMaterial({
           color: new THREE.Color(palette.cyan),
@@ -392,23 +239,14 @@ function ReticleCorners() {
           opacity: 0.75,
           depthWrite: false,
         });
-        return { line: new THREE.Line(geo, mat), anchor };
+        return new THREE.Line(geo, mat);
       }),
     [corners, half, arm]
   );
 
-  useFrame(({ camera }) => {
-    for (const { line, anchor } of lines) {
-      const facing = facingAmount(line, anchor, camera.position);
-      const onNearFace = THREE.MathUtils.smoothstep(facing, 0.0, 0.05);
-      line.visible = onNearFace > 0.01;
-      (line.material as THREE.LineBasicMaterial).opacity = 0.75 * onNearFace;
-    }
-  });
-
   return (
     <>
-      {lines.map(({ line }, i) => (
+      {lines.map((line, i) => (
         <primitive key={i} object={line} />
       ))}
     </>
@@ -427,7 +265,6 @@ export default function ScanPatch() {
   const worldDir = useMemo(() => new THREE.Vector3(), []);
   const localDir = useMemo(() => new THREE.Vector3(), []);
   const invMatrix = useMemo(() => new THREE.Matrix4(), []);
-  const camLocal = useMemo(() => new THREE.Vector3(), []);
 
   const uniforms = useMemo(
     () => ({
@@ -442,16 +279,7 @@ export default function ScanPatch() {
       // A small window of the equirectangular map around that centre —
       // this is what gives the patch visible internal detail (a coastline,
       // cloud edges) rather than reading as one flat sampled colour.
-      // Scaled with PATCH_SIZE. Held at the old 0.022 the patch sampled a
-      // far wider area than it now covers, so it showed different ground
-      // than the globe directly beneath it — which reads as a pasted-on
-      // overlay rather than the surface itself.
-      uFootprint: {
-        value: new THREE.Vector2(
-          0.022 * (PATCH_SIZE / 0.62),
-          0.022 * (PATCH_SIZE / 0.62),
-        ),
-      },
+      uFootprint: { value: new THREE.Vector2(0.022, 0.022) },
     }),
     []
   );
@@ -478,61 +306,11 @@ export default function ScanPatch() {
 
   useFrame((clock, delta) => {
     const t = clock.clock.elapsedTime;
-    const camera = clock.camera;
-
-    if (matRef.current) {
-      const u = matRef.current.uniforms;
-      let tex = dayMap;
-      if (!tex) {
-        // Straight off the Earth mesh's material — always the real one.
-        const em = earthMeshRef.current;
-        const emUniforms = (em?.material as THREE.ShaderMaterial | undefined)
-          ?.uniforms;
-        const fromEarth = emUniforms?.uDayMap?.value as
-          | THREE.Texture
-          | undefined;
-        if (fromEarth) tex = fromEarth;
-      }
-      if (u.uDayMap.value !== tex) {
-        u.uDayMap.value = tex ?? null;
-        u.uHasRealMap.value = tex ? 1 : 0;
-      }
-    }
 
     // Keep the patch pinned beneath the satellite, lying flat on the surface.
     satellitePositionAt(t, scratch);
-    scratch.normalize();
-
+    scratch.normalize().multiplyScalar(SURFACE_OFFSET);
     if (groupRef.current) {
-      // The footprint spans a wide arc, so following the sub-satellite point
-      // literally means that for much of the orbit half of it is round the
-      // back of the planet and gets clipped — the scan only ever looked
-      // whole when the satellite happened to be face-on. Lean the centre
-      // toward the viewer so the entire square stays on the near face.
-      //
-      // The satellite still leads it; this only caps how far it may trail
-      // off toward the limb.
-      const parent = groupRef.current.parent;
-      if (parent) {
-        parent.updateWorldMatrix(true, false);
-        camLocal.copy(camera.position);
-        parent.worldToLocal(camLocal).normalize();
-
-        const cos = THREE.MathUtils.clamp(scratch.dot(camLocal), -1, 1);
-        const angle = Math.acos(cos);
-        if (angle > MAX_VIEW_ANGLE && angle > 1e-4) {
-          // Slerp the direction back toward the camera until it sits exactly
-          // at the cap, so the motion stays smooth rather than snapping.
-          const k = MAX_VIEW_ANGLE / angle;
-          const sin = Math.sin(angle);
-          scratch
-            .multiplyScalar(Math.sin(k * angle) / sin)
-            .addScaledVector(camLocal, Math.sin((1 - k) * angle) / sin)
-            .normalize();
-        }
-      }
-
-      scratch.multiplyScalar(SURFACE_OFFSET);
       groupRef.current.position.copy(scratch);
       groupRef.current.lookAt(0, 0, 0);
       groupRef.current.rotateY(Math.PI);
@@ -589,7 +367,8 @@ export default function ScanPatch() {
 
   return (
     <group ref={groupRef}>
-      <mesh geometry={patchGeometry}>
+      <mesh>
+        <planeGeometry args={[PATCH_SIZE, PATCH_SIZE, 1, 1]} />
         <shaderMaterial
           ref={matRef}
           vertexShader={patchVertex}
@@ -604,6 +383,22 @@ export default function ScanPatch() {
         <DetectionBox key={det.id} det={det} visible={i < activeBoxCount} />
       ))}
 
+      {/* Real sensor readout — Cartosat-3's actual orbit and resolution,
+          not placeholder numbers, so the "instrument" reads as grounded. */}
+      <Html
+        position={[-PATCH_SIZE / 2.15, PATCH_SIZE / 2.15 + 0.05, 0]}
+        center={false}
+        distanceFactor={1.15}
+        zIndexRange={[3, 1]}
+        style={{ pointerEvents: "none" }}
+      >
+        <div
+          className="whitespace-nowrap font-mono text-[8px] tracking-wide"
+          style={{ color: palette.cyanSoft, textShadow: "0 0 6px rgba(0,0,0,0.9)" }}
+        >
+          {SATELLITE_SPECS.name} · {SATELLITE_SPECS.resolution} · {SATELLITE_SPECS.orbit}
+        </div>
+      </Html>
     </group>
   );
 }

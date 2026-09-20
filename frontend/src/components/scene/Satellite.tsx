@@ -224,6 +224,97 @@ function SatelliteBody() {
   );
 }
 
+/**
+ * Rectangular scan frustum drawn explicitly between the satellite and its
+ * sub-satellite surface point, so the direction can't be got wrong by an
+ * off-by-90° local rotation. Wide end sits on the surface.
+ */
+const UP = new THREE.Vector3(0, 1, 0);
+
+function ScanBeam() {
+  const state = useSceneStore((s) => s.state);
+  const groupRef = useRef<THREE.Group>(null);
+  const meshRef = useRef<THREE.Mesh>(null);
+  const edgesRef = useRef<THREE.LineSegments>(null);
+
+  const satPos = useMemo(() => new THREE.Vector3(), []);
+  const surfacePos = useMemo(() => new THREE.Vector3(), []);
+  const dir = useMemo(() => new THREE.Vector3(), []);
+  const mid = useMemo(() => new THREE.Vector3(), []);
+  const quat = useMemo(() => new THREE.Quaternion(), []);
+
+  const geometry = useMemo(() => {
+    // Wide end at +Y (surface), narrow end at -Y (sensor).
+    const geo = new THREE.CylinderGeometry(0.22, 0.015, 1, 4, 1, true);
+    geo.rotateY(Math.PI / 4);
+    return geo;
+  }, []);
+
+  const edgeGeometry = useMemo(
+    () => new THREE.EdgesGeometry(geometry, 1),
+    [geometry]
+  );
+
+  useFrame((clock) => {
+    const t = clock.clock.elapsedTime;
+
+    satellitePositionAt(t, satPos);
+    surfacePos.copy(satPos).normalize().multiplyScalar(1.0);
+
+    dir.copy(surfacePos).sub(satPos);
+    const len = dir.length();
+    dir.normalize();
+
+    if (groupRef.current) {
+      mid.copy(satPos).addScaledVector(dir, len / 2);
+      groupRef.current.position.copy(mid);
+      quat.setFromUnitVectors(UP, dir);
+      groupRef.current.quaternion.copy(quat);
+      groupRef.current.scale.set(1, len, 1);
+    }
+
+    const active = state === "query-active";
+    const pulse = 0.5 + 0.5 * Math.sin(t * 2.2);
+
+    if (meshRef.current) {
+      const mat = meshRef.current.material as THREE.MeshBasicMaterial;
+      mat.opacity = (active ? 0.34 : 0.16) + pulse * (active ? 0.12 : 0.05);
+    }
+    if (edgesRef.current) {
+      const mat = edgesRef.current.material as THREE.LineBasicMaterial;
+      mat.opacity = (active ? 0.95 : 0.62) + pulse * 0.1;
+    }
+  });
+
+  return (
+    <group ref={groupRef}>
+      {/*
+        Normal blending, not additive: additive light-adds against the pale
+        page background instead of reading as a cyan beam, which is what
+        washed the whole scan cone out to near-white.
+      */}
+      <mesh ref={meshRef} geometry={geometry}>
+        <meshBasicMaterial
+          color={palette.cyanDeep}
+          transparent
+          opacity={0.16}
+          depthWrite={false}
+          blending={THREE.NormalBlending}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+      <lineSegments ref={edgesRef} geometry={edgeGeometry}>
+        <lineBasicMaterial
+          color={palette.cyanDeep}
+          transparent
+          opacity={0.62}
+          depthWrite={false}
+        />
+      </lineSegments>
+    </group>
+  );
+}
+
 export default function Satellite() {
   const groupRef = useRef<THREE.Group>(null);
   const scratch = useMemo(() => new THREE.Vector3(), []);
@@ -242,6 +333,7 @@ export default function Satellite() {
   return (
     <>
       <OrbitPath />
+      <ScanBeam />
       <group ref={groupRef}>
         <SatelliteBody />
         <Html
