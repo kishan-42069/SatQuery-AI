@@ -168,7 +168,11 @@ const patchFragment = /* glsl */ `
 
     vec2 centered = vUv - 0.5;
     float dist = length(centered);
-    float falloff = 1.0 - smoothstep(0.42, 0.56, dist);
+    // 0 at the centre, 1 at any edge, >1 only outside — a square metric, so
+    // the corners survive instead of being cut off by a circular fade.
+    vec2 edges = abs(centered) * 2.0;
+    float edge = max(edges.x, edges.y);
+    float falloff = 1.0 - smoothstep(0.82, 1.0, edge);
     if (falloff * limbFade <= 0.001) discard;
 
     vec3 base;
@@ -331,7 +335,7 @@ function DetectionBox({
  * plain square patch doesn't give.
  */
 function ReticleCorners() {
-  const half = PATCH_SIZE / 2.15;
+  const half = PATCH_SIZE / 2.45;
   const arm = PATCH_SIZE * 0.16;
 
   const corners = useMemo(
@@ -448,6 +452,25 @@ export default function ScanPatch() {
 
   useFrame((clock, delta) => {
     const t = clock.clock.elapsedTime;
+
+    if (matRef.current) {
+      const u = matRef.current.uniforms;
+      let tex = dayMap;
+      if (!tex) {
+        // Straight off the Earth mesh's material — always the real one.
+        const em = earthMeshRef.current;
+        const emUniforms = (em?.material as THREE.ShaderMaterial | undefined)
+          ?.uniforms;
+        const fromEarth = emUniforms?.uDayMap?.value as
+          | THREE.Texture
+          | undefined;
+        if (fromEarth) tex = fromEarth;
+      }
+      if (u.uDayMap.value !== tex) {
+        u.uDayMap.value = tex ?? null;
+        u.uHasRealMap.value = tex ? 1 : 0;
+      }
+    }
 
     // Keep the patch pinned beneath the satellite, lying flat on the surface.
     satellitePositionAt(t, scratch);
