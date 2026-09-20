@@ -6,12 +6,12 @@ import { useFrame } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import { palette } from "@/lib/theme";
 import { useSceneStore } from "@/hooks/useSceneStore";
-import { satellitePositionAt, SATELLITE_SPECS } from "./Satellite";
+import { satellitePositionAt } from "./Satellite";
 import { useEarthTextures } from "@/hooks/useEarthTextures";
 import { earthMeshRef } from "@/lib/earthMeshRef";
 import { noiseGLSL } from "@/lib/shaders/noise.glsl";
 
-const PATCH_SIZE = 0.62;
+const PATCH_SIZE = 0.34;
 const SURFACE_OFFSET = 1.004;
 
 /**
@@ -63,6 +63,37 @@ function surfaceNormal(x: number, y: number): THREE.Vector3 {
   return new THREE.Vector3(x, y, R).normalize();
 }
 
+const _w = new THREE.Vector3();
+const _c = new THREE.Vector3();
+const _n = new THREE.Vector3();
+const _v = new THREE.Vector3();
+const ORIGIN = new THREE.Vector3(0, 0, 0);
+
+/**
+ * How squarely a point on the patch faces the camera: >0 on the visible
+ * hemisphere, <=0 once it has wrapped around the limb onto the far side.
+ *
+ * The shader does this per-fragment, but the reticle and detection outlines
+ * are lines and their captions are DOM, so neither can discard. Without this
+ * they keep drawing past the silhouette — nothing occludes them there,
+ * because Earth's atmosphere shell is transparent with depthWrite off.
+ */
+function facingAmount(
+  obj: THREE.Object3D,
+  local: THREE.Vector3,
+  cameraPos: THREE.Vector3,
+): number {
+  _w.copy(local).applyMatrix4(obj.matrixWorld);
+  // Globe centre: the patch group hangs off GlobeSystem's inner group, whose
+  // origin is the planet's centre.
+  const parent = obj.parent;
+  if (parent) parent.getWorldPosition(_c);
+  else _c.set(0, 0, 0);
+  _n.copy(_w).sub(_c).normalize();
+  _v.copy(cameraPos).sub(_w).normalize();
+  return _n.dot(_v);
+}
+
 /**
  * Detections shown on the scanned surface patch. The first two are always
  * visible (idle); the remaining ones snap in when a query runs — mirroring
@@ -77,10 +108,18 @@ const DETECTIONS = [
 
 const patchVertex = /* glsl */ `
   varying vec2 vUv;
+  varying vec3 vViewPos;
+  varying vec3 vViewNormal;
 
   void main() {
     vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    // View space, not world: normalMatrix already folds in whatever scale
+    // GlobeSystem has applied, so the normal stays correct while the globe
+    // is being scaled through the hero travel.
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    vViewPos = mv.xyz;
+    vViewNormal = normalize(normalMatrix * normal);
+    gl_Position = projectionMatrix * mv;
   }
 `;
 
@@ -103,6 +142,8 @@ const patchFragment = /* glsl */ `
   uniform vec2 uSampleCenter;
   uniform vec2 uFootprint;
   varying vec2 vUv;
+  varying vec3 vViewPos;
+  varying vec3 vViewNormal;
 
   ${noiseGLSL}
 
@@ -116,10 +157,19 @@ const patchFragment = /* glsl */ `
   void main() {
     // radial falloff so the patch blends into the globe instead of
     // sitting on it as a hard-edged decal
+    // Camera sits at the origin in view space, so the view vector is just
+    // the negated fragment position. A fragment is on the near face when its
+    // outward normal still points back toward the camera.
+    float facing = dot(normalize(vViewNormal), normalize(-vViewPos));
+    if (facing <= 0.0) discard;
+    // Feather the last few degrees so the patch dissolves into the limb
+    // instead of being sheared off along a hard terminator line.
+    float limbFade = smoothstep(0.0, 0.18, facing);
+
     vec2 centered = vUv - 0.5;
     float dist = length(centered);
     float falloff = 1.0 - smoothstep(0.30, 0.5, dist);
-    if (falloff <= 0.001) discard;
+    if (falloff * limbFade <= 0.001) discard;
 
     vec3 base;
     if (uHasRealMap > 0.5) {
@@ -180,7 +230,7 @@ const patchFragment = /* glsl */ `
     float ringLine = smoothstep(0.05, 0.0, abs(ring - 0.5)) * smoothstep(0.5, 0.0, dist);
     base += uGridColor * ringLine * (0.3 + 0.5 * uActive);
 
-    float alpha = falloff * (0.86 + 0.14 * uActive);
+    float alpha = falloff * limbFade * (0.86 + 0.14 * uActive);
     gl_FragColor = vec4(base, alpha);
   }
 `;
@@ -194,6 +244,7 @@ function DetectionBox({
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const scaleRef = useRef(0);
+  const labelRef = useRef<HTMLDivElement>(null);
 
   const outline = useMemo(() => {
     const { w, h } = det;
@@ -213,15 +264,24 @@ function DetectionBox({
     return new THREE.Line(geo, mat);
   }, [det]);
 
-  useFrame((_, delta) => {
+  useFrame(({ camera }, delta) => {
     const target = visible ? 1 : 0;
     scaleRef.current += (target - scaleRef.current) * Math.min(delta * 6, 1);
-    if (groupRef.current) {
+    const g = groupRef.current;
+    if (g) {
       const s = scaleRef.current;
-      groupRef.current.scale.setScalar(0.85 + s * 0.15);
-      groupRef.current.visible = s > 0.02;
+      g.scale.setScalar(0.85 + s * 0.15);
+      // Local origin, because the group is already sitting at `pos`.
+      const facing = facingAmount(g, ORIGIN, camera.position);
+      const onNearFace = THREE.MathUtils.smoothstep(facing, 0.0, 0.18);
+      g.visible = s > 0.02 && onNearFace > 0.01;
       const mat = outline.material as THREE.LineBasicMaterial;
-      mat.opacity = s * 0.95;
+      mat.opacity = s * 0.95 * onNearFace;
+      if (labelRef.current) {
+        labelRef.current.style.opacity = String(
+          (visible ? 1 : 0) * onNearFace,
+        );
+      }
     }
   });
 
@@ -247,11 +307,11 @@ function DetectionBox({
         zIndexRange={[4, 1]}
       >
         <div
+          ref={labelRef}
           className="whitespace-nowrap font-mono text-[9px] tracking-wide"
           style={{
             color: det.conf > 0.9 ? palette.amberSoft : palette.cyanSoft,
-            opacity: visible ? 1 : 0,
-            transition: "opacity 300ms ease",
+            opacity: 0,
             textShadow: "0 0 6px rgba(0,0,0,0.9)",
           }}
         >
@@ -292,6 +352,7 @@ function ReticleCorners() {
           onSurface(x, y, 0.003),
           onSurface(x - sx * arm, y, 0.003),
         ];
+        const anchor = onSurface(x, y, 0.003);
         const geo = new THREE.BufferGeometry().setFromPoints(pts);
         const mat = new THREE.LineBasicMaterial({
           color: new THREE.Color(palette.cyan),
@@ -299,14 +360,23 @@ function ReticleCorners() {
           opacity: 0.75,
           depthWrite: false,
         });
-        return new THREE.Line(geo, mat);
+        return { line: new THREE.Line(geo, mat), anchor };
       }),
     [corners, half, arm]
   );
 
+  useFrame(({ camera }) => {
+    for (const { line, anchor } of lines) {
+      const facing = facingAmount(line, anchor, camera.position);
+      const onNearFace = THREE.MathUtils.smoothstep(facing, 0.0, 0.18);
+      line.visible = onNearFace > 0.01;
+      (line.material as THREE.LineBasicMaterial).opacity = 0.75 * onNearFace;
+    }
+  });
+
   return (
     <>
-      {lines.map((line, i) => (
+      {lines.map(({ line }, i) => (
         <primitive key={i} object={line} />
       ))}
     </>
@@ -442,22 +512,6 @@ export default function ScanPatch() {
         <DetectionBox key={det.id} det={det} visible={i < activeBoxCount} />
       ))}
 
-      {/* Real sensor readout — Cartosat-3's actual orbit and resolution,
-          not placeholder numbers, so the "instrument" reads as grounded. */}
-      <Html
-        position={onSurface(-PATCH_SIZE / 2.15, PATCH_SIZE / 2.15 + 0.05, 0.01)}
-        center={false}
-        distanceFactor={1.15}
-        zIndexRange={[3, 1]}
-        style={{ pointerEvents: "none" }}
-      >
-        <div
-          className="whitespace-nowrap font-mono text-[8px] tracking-wide"
-          style={{ color: palette.cyanSoft, textShadow: "0 0 6px rgba(0,0,0,0.9)" }}
-        >
-          {SATELLITE_SPECS.name} · {SATELLITE_SPECS.resolution} · {SATELLITE_SPECS.orbit}
-        </div>
-      </Html>
     </group>
   );
 }
