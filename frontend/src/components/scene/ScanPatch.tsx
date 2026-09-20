@@ -97,10 +97,17 @@ function facingAmount(
   cameraPos: THREE.Vector3,
 ): number {
   _w.copy(local).applyMatrix4(obj.matrixWorld);
-  // Globe centre: the patch group hangs off GlobeSystem's inner group, whose
-  // origin is the planet's centre.
-  const parent = obj.parent;
-  if (parent) parent.getWorldPosition(_c);
+  // Globe centre. Earth's mesh sits at the origin of GlobeSystem's inner
+  // group, so its world position IS the centre, whatever drag, travel scale
+  // or offset is stacked above it.
+  //
+  // This used to read obj.parent, which is only the globe centre for the
+  // patch group itself. The reticle lines and detection boxes are children
+  // OF that group, so their parent is a point ON the sphere — the normal
+  // came out as the difference between two nearby surface points, which is
+  // near-zero and points sideways. Their limb test was reading noise.
+  const earth = earthMeshRef.current;
+  if (earth) earth.getWorldPosition(_c);
   else _c.set(0, 0, 0);
   _n.copy(_w).sub(_c).normalize();
   _v.copy(cameraPos).sub(_w).normalize();
