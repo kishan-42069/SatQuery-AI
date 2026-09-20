@@ -203,6 +203,11 @@ const patchFragment = /* glsl */ `
       base = mix(uTerrainLow, uTerrainHigh, smoothstep(0.35, 0.7, terrain));
     }
 
+    // Sensor wash. Keeps the underlying imagery readable through it while
+    // giving the footprint the density it needs to read as an instrument
+    // looking at the ground, not a wireframe laid over it.
+    base = mix(base, uGridColor, 0.46 + 0.12 * uActive);
+
     // GIS tiling grid — two tiers, like a real sensor's pixel/tile
     // overlay: a fine cell grid plus a heavier tile boundary every 4 cells,
     // rather than one uniform lattice.
@@ -215,13 +220,13 @@ const patchFragment = /* glsl */ `
     vec2 fineAA = max(fwidth(fine), vec2(1e-5));
     vec2 fineD = abs(fract(fine) - 0.5) / fineAA;
     float gridLine = 1.0 - smoothstep(0.0, 0.9, min(fineD.x, fineD.y));
-    base = mix(base, uGridColor, gridLine * (0.16 + 0.14 * uActive));
+    base = mix(base, uGridColor, gridLine * (0.34 + 0.18 * uActive));
 
     vec2 tile = vUv * 3.0;
     vec2 tileAA = max(fwidth(tile), vec2(1e-5));
     vec2 tileD = abs(fract(tile) - 0.5) / tileAA;
     float tileLine = 1.0 - smoothstep(0.0, 1.5, min(tileD.x, tileD.y));
-    base = mix(base, uGridColor, tileLine * (0.32 + 0.22 * uActive));
+    base = mix(base, uGridColor, tileLine * (0.58 + 0.24 * uActive));
 
     // scan sweep travelling across the patch, with a soft trailing fade
     // behind the leading edge so it reads as a moving beam, not a bar
@@ -238,7 +243,7 @@ const patchFragment = /* glsl */ `
     float ringLine = smoothstep(0.05, 0.0, abs(ring - 0.5)) * smoothstep(0.5, 0.0, dist);
     base += uGridColor * ringLine * (0.3 + 0.5 * uActive);
 
-    float alpha = falloff * limbFade * (0.86 + 0.14 * uActive);
+    float alpha = falloff * limbFade * (0.93 + 0.07 * uActive);
     gl_FragColor = vec4(base, alpha);
   }
 `;
