@@ -100,10 +100,10 @@ function facingAmount(
  * the PRD's grounding workflow producing additional evidence regions.
  */
 const DETECTIONS = [
-  { id: "d1", x: -0.17, y: 0.11, w: 0.19, h: 0.13, label: "built-up", conf: 0.94 },
-  { id: "d2", x: 0.13, y: -0.06, w: 0.15, h: 0.11, label: "water", conf: 0.87 },
-  { id: "d3", x: -0.05, y: -0.19, w: 0.13, h: 0.09, label: "vegetation", conf: 0.79 },
-  { id: "d4", x: 0.19, y: 0.18, w: 0.11, h: 0.1, label: "change", conf: 0.91 },
+  { id: "d1", x: -0.22, y: 0.16, w: 0.26, h: 0.19, label: "built-up", conf: 0.94 },
+  { id: "d2", x: 0.19, y: -0.1, w: 0.22, h: 0.16, label: "water", conf: 0.87 },
+  { id: "d3", x: -0.08, y: -0.24, w: 0.19, h: 0.13, label: "vegetation", conf: 0.79 },
+  { id: "d4", x: 0.24, y: 0.23, w: 0.16, h: 0.14, label: "change", conf: 0.91 },
 ] as const;
 
 const patchVertex = /* glsl */ `
@@ -164,11 +164,11 @@ const patchFragment = /* glsl */ `
     if (facing <= 0.0) discard;
     // Feather the last few degrees so the patch dissolves into the limb
     // instead of being sheared off along a hard terminator line.
-    float limbFade = smoothstep(0.0, 0.18, facing);
+    float limbFade = smoothstep(0.0, 0.05, facing);
 
     vec2 centered = vUv - 0.5;
     float dist = length(centered);
-    float falloff = 1.0 - smoothstep(0.30, 0.5, dist);
+    float falloff = 1.0 - smoothstep(0.42, 0.56, dist);
     if (falloff * limbFade <= 0.001) discard;
 
     vec3 base;
@@ -247,7 +247,8 @@ function DetectionBox({
   const labelRef = useRef<HTMLDivElement>(null);
 
   const outline = useMemo(() => {
-    const { w, h } = det;
+    const w = det.w * PATCH_SIZE;
+    const h = det.h * PATCH_SIZE;
     const pts = [
       new THREE.Vector3(-w / 2, -h / 2, 0),
       new THREE.Vector3(w / 2, -h / 2, 0),
@@ -273,7 +274,7 @@ function DetectionBox({
       g.scale.setScalar(0.85 + s * 0.15);
       // Local origin, because the group is already sitting at `pos`.
       const facing = facingAmount(g, ORIGIN, camera.position);
-      const onNearFace = THREE.MathUtils.smoothstep(facing, 0.0, 0.18);
+      const onNearFace = THREE.MathUtils.smoothstep(facing, 0.0, 0.05);
       g.visible = s > 0.02 && onNearFace > 0.01;
       const mat = outline.material as THREE.LineBasicMaterial;
       mat.opacity = s * 0.95 * onNearFace;
@@ -288,10 +289,12 @@ function DetectionBox({
   // Sit the box on the curved surface and tilt it to the local normal, so
   // it lies on the imagery rather than hovering above it off-centre.
   const { pos, quat } = useMemo(() => {
-    const p = onSurface(det.x, det.y, 0.002);
+    const dx = det.x * PATCH_SIZE;
+    const dy = det.y * PATCH_SIZE;
+    const p = onSurface(dx, dy, 0.002);
     const q = new THREE.Quaternion().setFromUnitVectors(
       new THREE.Vector3(0, 0, 1),
-      surfaceNormal(det.x, det.y),
+      surfaceNormal(dx, dy),
     );
     return { pos: p, quat: q };
   }, [det]);
@@ -300,7 +303,7 @@ function DetectionBox({
     <group ref={groupRef} position={pos} quaternion={quat}>
       <primitive object={outline} />
       <Html
-        position={[det.w / 2 + 0.012, det.h / 2, 0]}
+        position={[(det.w * PATCH_SIZE) / 2 + 0.012, (det.h * PATCH_SIZE) / 2, 0]}
         center={false}
         distanceFactor={1.15}
         style={{ pointerEvents: "none" }}
@@ -368,7 +371,7 @@ function ReticleCorners() {
   useFrame(({ camera }) => {
     for (const { line, anchor } of lines) {
       const facing = facingAmount(line, anchor, camera.position);
-      const onNearFace = THREE.MathUtils.smoothstep(facing, 0.0, 0.18);
+      const onNearFace = THREE.MathUtils.smoothstep(facing, 0.0, 0.05);
       line.visible = onNearFace > 0.01;
       (line.material as THREE.LineBasicMaterial).opacity = 0.75 * onNearFace;
     }
@@ -409,7 +412,16 @@ export default function ScanPatch() {
       // A small window of the equirectangular map around that centre —
       // this is what gives the patch visible internal detail (a coastline,
       // cloud edges) rather than reading as one flat sampled colour.
-      uFootprint: { value: new THREE.Vector2(0.022, 0.022) },
+      // Scaled with PATCH_SIZE. Held at the old 0.022 the patch sampled a
+      // far wider area than it now covers, so it showed different ground
+      // than the globe directly beneath it — which reads as a pasted-on
+      // overlay rather than the surface itself.
+      uFootprint: {
+        value: new THREE.Vector2(
+          0.022 * (PATCH_SIZE / 0.62),
+          0.022 * (PATCH_SIZE / 0.62),
+        ),
+      },
     }),
     []
   );
