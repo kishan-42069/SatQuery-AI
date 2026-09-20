@@ -110,7 +110,7 @@ export default function HeroOverlay() {
                 event.preventDefault();
                 exitTo(item.href);
               }}
-              className="cursor-pointer rounded-lg px-3.5 py-2 text-[13px] transition-colors duration-200 hover:text-[var(--ink-primary)]"
+              className="cursor-pointer rounded-md px-3.5 py-2 text-[13px] transition-colors duration-200 hover:text-[var(--ink-primary)]"
               style={{
                 color: "var(--ink-muted)",
                 fontFamily: "var(--font-grotesk-display)",
@@ -127,7 +127,7 @@ export default function HeroOverlay() {
             type="button"
             onClick={() => exitTo("/model-demo")}
             title="Interactive demonstration of change detection"
-            className="pointer-events-auto flex items-center gap-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 text-[13px] font-semibold text-cyan-400 hover:bg-cyan-500/20 transition-all duration-200 active:scale-95 shadow-sm"
+            className="pointer-events-auto flex items-center gap-1.5 rounded-md border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 text-[13px] font-semibold text-cyan-400 hover:bg-cyan-500/20 transition-all duration-200 active:scale-95 shadow-sm"
             style={{
               fontFamily: "var(--font-grotesk-display)",
             }}
@@ -140,7 +140,7 @@ export default function HeroOverlay() {
             onClick={loadExampleProject}
             disabled={seeding}
             title="Load real satellite imagery for comparison"
-            className="pointer-events-auto hidden cursor-pointer rounded-lg border px-4 py-2 text-[13px] transition-colors duration-200 disabled:cursor-wait disabled:opacity-70 sm:block"
+            className="pointer-events-auto hidden cursor-pointer rounded-md border px-4 py-2 text-[13px] transition-colors duration-200 disabled:cursor-wait disabled:opacity-70 sm:block"
             style={{
               fontFamily: "var(--font-grotesk-display)",
               borderColor: "var(--control-border)",
@@ -158,7 +158,7 @@ export default function HeroOverlay() {
               event.preventDefault();
               exitTo("/analyze");
             }}
-            className="pointer-events-auto cursor-pointer rounded-lg px-5 py-2.5 text-[13px] font-medium transition-[filter,transform] duration-200 hover:brightness-110 active:scale-[0.98]"
+            className="pointer-events-auto cursor-pointer rounded-md px-5 py-2.5 text-[13px] font-medium transition-[filter,transform] duration-200 hover:brightness-110 active:scale-[0.98]"
             style={{
               fontFamily: "var(--font-grotesk-display)",
               background:

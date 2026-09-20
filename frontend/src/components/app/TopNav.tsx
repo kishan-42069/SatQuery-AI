@@ -105,7 +105,7 @@ export default function TopNav() {
               type="button"
               onClick={() => setShowModelDemo(true)}
               title="Interactive demonstration of change detection"
-              className="flex items-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-400 hover:bg-cyan-500/20 transition-all shadow-sm active:scale-95"
+              className="flex items-center gap-1.5 rounded-md border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-400 hover:bg-cyan-500/20 transition-all shadow-sm active:scale-95"
             >
               <span>Demo</span>
             </button>
