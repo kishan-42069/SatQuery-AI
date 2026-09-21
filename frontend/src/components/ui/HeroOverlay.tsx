@@ -191,13 +191,6 @@ export default function HeroOverlay() {
         the first screen overflowing by the height of the toolbar.
       */}
       <section className="relative flex min-h-[100svh] flex-col items-center justify-center px-6 pb-[42vh] pt-28 text-center">
-        <span
-          className="pointer-events-auto mb-6 font-mono text-[10px] uppercase tracking-[0.2em]"
-          style={{ color: "var(--ink-muted)" }}
-        >
-          Agentic vision-language assistant
-        </span>
-
         {/*
           Set like a masthead: very large, tight leading, slightly negative
           tracking. Line two carries the cool-to-warm accent gradient, which
