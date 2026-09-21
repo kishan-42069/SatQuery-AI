@@ -75,9 +75,13 @@ const DETECTIONS = [
 
 const patchVertex = /* glsl */ `
   varying vec2 vUv;
+  varying vec3 vNormal;
 
   void main() {
     vUv = uv;
+    // Same convention <Earth /> uses for its own day/night term, so the two
+    // agree about which way the sun is.
+    vNormal = normalize(normalMatrix * normal);
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }
 `;
@@ -100,7 +104,9 @@ const patchFragment = /* glsl */ `
   // regardless of how many rotations are stacked above it.
   uniform vec2 uSampleCenter;
   uniform vec2 uFootprint;
+  uniform vec3 uLightDir;
   varying vec2 vUv;
+  varying vec3 vNormal;
 
   ${noiseGLSL}
 
@@ -136,6 +142,9 @@ const patchFragment = /* glsl */ `
       // is what makes the two actually look like the same imagery.
       vec3 graded = saturateColor(real * 1.55, 1.3);
       base = graded * 1.05;
+
+      float dayMix = smoothstep(-0.12, 0.32, dot(normalize(vNormal), normalize(uLightDir)));
+      base *= mix(0.10, 1.0, dayMix);
     } else {
       // Fallback for the brief window before Earth's textures resolve —
       // stylised, not meant to represent real geography.
@@ -338,6 +347,8 @@ export default function ScanPatch() {
       // this is what gives the patch visible internal detail (a coastline,
       // cloud edges) rather than reading as one flat sampled colour.
       uFootprint: { value: new THREE.Vector2(0.022, 0.022) },
+      // Matches <Earth />'s own uLightDir so both agree on the terminator.
+      uLightDir: { value: new THREE.Vector3(1, 0.4, 0.6).normalize() },
     }),
     []
   );
