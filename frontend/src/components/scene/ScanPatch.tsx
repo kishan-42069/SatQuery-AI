@@ -11,8 +11,58 @@ import { useEarthTextures } from "@/hooks/useEarthTextures";
 import { earthMeshRef } from "@/lib/earthMeshRef";
 import { noiseGLSL } from "@/lib/shaders/noise.glsl";
 
+/** The patch plane's own outward axis, mapped onto the surface normal. */
+const LOCAL_Z = new THREE.Vector3(0, 0, 1);
+
 const PATCH_SIZE = 0.62;
 const SURFACE_OFFSET = 1.004;
+
+/**
+ * The footprint is a plane bent onto the globe rather than laid flat
+ * against it. A tangent plane only touches the sphere at its centre, so at
+ * this size the corners lift off and the patch reads as a card angled over
+ * the Earth instead of imagery lying on it.
+ *
+ * The group sits at SURFACE_OFFSET along the sub-satellite normal, turned
+ * to face the centre, which puts Earth's centre at local (0, 0, -R). Each
+ * vertex is re-projected onto the sphere of that radius about that point:
+ * the centre vertex stays put and the edges drop into the curvature.
+ * planeGeometry's UVs are untouched, so the shader's sampling and grid
+ * maths are unaffected.
+ */
+const patchGeometry = (() => {
+  const geo = new THREE.PlaneGeometry(PATCH_SIZE, PATCH_SIZE, 24, 24);
+  const pos = geo.attributes.position;
+  const R = SURFACE_OFFSET;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    const len = Math.sqrt(x * x + y * y + R * R);
+    pos.setXYZ(i, (R * x) / len, (R * y) / len, (R * R) / len - R);
+  }
+  pos.needsUpdate = true;
+  geo.computeVertexNormals();
+  return geo;
+})();
+
+/**
+ * Same projection for the overlays drawn on the patch. Without it they stay
+ * on the old flat plane and float off the surface toward the edges — the
+ * exact artefact the curved geometry removes. `lift` nudges lines outward
+ * so they do not z-fight the patch they sit on.
+ */
+function onSurface(x: number, y: number, lift = 0): THREE.Vector3 {
+  const R = SURFACE_OFFSET;
+  const len = Math.sqrt(x * x + y * y + R * R);
+  const r = R + lift;
+  return new THREE.Vector3((r * x) / len, (r * y) / len, (r * R) / len - R);
+}
+
+/** Outward normal at a tangent-plane coordinate, in the group's local frame. */
+function surfaceNormal(x: number, y: number): THREE.Vector3 {
+  const R = SURFACE_OFFSET;
+  return new THREE.Vector3(x, y, R).normalize();
+}
 
 /**
  * Detections shown on the scanned surface patch. The first two are always
@@ -28,9 +78,13 @@ const DETECTIONS = [
 
 const patchVertex = /* glsl */ `
   varying vec2 vUv;
+  varying vec3 vNormal;
 
   void main() {
     vUv = uv;
+    // Same convention <Earth /> uses for its own day/night term, so the two
+    // agree about which way the sun is.
+    vNormal = normalize(normalMatrix * normal);
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }
 `;
@@ -53,7 +107,9 @@ const patchFragment = /* glsl */ `
   // regardless of how many rotations are stacked above it.
   uniform vec2 uSampleCenter;
   uniform vec2 uFootprint;
+  uniform vec3 uLightDir;
   varying vec2 vUv;
+  varying vec3 vNormal;
 
   ${noiseGLSL}
 
@@ -89,6 +145,9 @@ const patchFragment = /* glsl */ `
       // is what makes the two actually look like the same imagery.
       vec3 graded = saturateColor(real * 1.55, 1.3);
       base = graded * 1.05;
+
+      float dayMix = smoothstep(-0.12, 0.32, dot(normalize(vNormal), normalize(uLightDir)));
+      base *= mix(0.10, 1.0, dayMix);
     } else {
       // Fallback for the brief window before Earth's textures resolve —
       // stylised, not meant to represent real geography.
@@ -176,8 +235,19 @@ function DetectionBox({
     }
   });
 
+  // Sit the box on the curved surface and tilt it to the local normal, so
+  // it lies on the imagery rather than hovering above it off-centre.
+  const { pos, quat } = useMemo(() => {
+    const p = onSurface(det.x, det.y, 0.002);
+    const q = new THREE.Quaternion().setFromUnitVectors(
+      new THREE.Vector3(0, 0, 1),
+      surfaceNormal(det.x, det.y),
+    );
+    return { pos: p, quat: q };
+  }, [det]);
+
   return (
-    <group ref={groupRef} position={[det.x, det.y, 0.002]}>
+    <group ref={groupRef} position={pos} quaternion={quat}>
       <primitive object={outline} />
       <Html
         position={[det.w / 2 + 0.012, det.h / 2, 0]}
@@ -228,9 +298,9 @@ function ReticleCorners() {
         const x = sx * half;
         const y = sy * half;
         const pts = [
-          new THREE.Vector3(x, y - sy * arm, 0.003),
-          new THREE.Vector3(x, y, 0.003),
-          new THREE.Vector3(x - sx * arm, y, 0.003),
+          onSurface(x, y - sy * arm, 0.003),
+          onSurface(x, y, 0.003),
+          onSurface(x - sx * arm, y, 0.003),
         ];
         const geo = new THREE.BufferGeometry().setFromPoints(pts);
         const mat = new THREE.LineBasicMaterial({
@@ -264,6 +334,7 @@ export default function ScanPatch() {
   const worldPos = useMemo(() => new THREE.Vector3(), []);
   const worldDir = useMemo(() => new THREE.Vector3(), []);
   const localDir = useMemo(() => new THREE.Vector3(), []);
+  const outward = useMemo(() => new THREE.Vector3(), []);
   const invMatrix = useMemo(() => new THREE.Matrix4(), []);
 
   const uniforms = useMemo(
@@ -280,6 +351,8 @@ export default function ScanPatch() {
       // this is what gives the patch visible internal detail (a coastline,
       // cloud edges) rather than reading as one flat sampled colour.
       uFootprint: { value: new THREE.Vector2(0.022, 0.022) },
+      // Matches <Earth />'s own uLightDir so both agree on the terminator.
+      uLightDir: { value: new THREE.Vector3(1, 0.4, 0.6).normalize() },
     }),
     []
   );
@@ -312,8 +385,24 @@ export default function ScanPatch() {
     scratch.normalize().multiplyScalar(SURFACE_OFFSET);
     if (groupRef.current) {
       groupRef.current.position.copy(scratch);
-      groupRef.current.lookAt(0, 0, 0);
-      groupRef.current.rotateY(Math.PI);
+
+      // Orient in the PARENT's frame, not via lookAt.
+      //
+      // Object3D.lookAt(0, 0, 0) aims at the WORLD origin, but the patch's
+      // position above is set in GlobeSystem's local frame, where the origin
+      // IS the planet's centre. Those two only coincide while the globe sits
+      // at the world origin — and GlobeSystem moves it constantly
+      // (shell.position.y as the hero rises, g.position during travel and
+      // fly-to-place). With an offset live, the patch aimed at a point that
+      // was not the centre and tilted off tangent, in the worst case
+      // standing perpendicular to the ground like a fin.
+      //
+      // The outward radial direction in this frame is just the normalised
+      // local position, so build the rotation from it directly: local +Z
+      // maps onto the outward normal, which puts the plane tangent to the
+      // surface no matter where the globe has been moved to.
+      outward.copy(scratch).normalize();
+      groupRef.current.quaternion.setFromUnitVectors(LOCAL_Z, outward);
 
       // Where the patch actually sits, in world space, right now —
       // updateWorldMatrix forces this and its ancestors (GlobeSystem's
@@ -367,8 +456,7 @@ export default function ScanPatch() {
 
   return (
     <group ref={groupRef}>
-      <mesh>
-        <planeGeometry args={[PATCH_SIZE, PATCH_SIZE, 1, 1]} />
+      <mesh geometry={patchGeometry}>
         <shaderMaterial
           ref={matRef}
           vertexShader={patchVertex}
@@ -386,7 +474,7 @@ export default function ScanPatch() {
       {/* Real sensor readout — Cartosat-3's actual orbit and resolution,
           not placeholder numbers, so the "instrument" reads as grounded. */}
       <Html
-        position={[-PATCH_SIZE / 2.15, PATCH_SIZE / 2.15 + 0.05, 0]}
+        position={onSurface(-PATCH_SIZE / 2.15, PATCH_SIZE / 2.15 + 0.05, 0.01)}
         center={false}
         distanceFactor={1.15}
         zIndexRange={[3, 1]}

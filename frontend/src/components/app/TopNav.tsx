@@ -53,7 +53,7 @@ export default function TopNav() {
             </span>
           </Link>
 
-          <nav className="flex flex-1 items-center justify-center gap-1">
+          <nav className="flex flex-1 items-center justify-center gap-2">
             {NAV.map((item) => {
               // "/" must match exactly or it lights up on every route.
               const isActive =
@@ -85,15 +85,15 @@ export default function TopNav() {
                   }}
                   aria-current={isActive ? "page" : undefined}
                   className={cx(
-                    "relative px-3 py-5 text-sm transition-colors",
+                    "relative px-4 py-5 text-sm font-medium transition-colors",
                     isActive
-                      ? "font-medium text-[var(--ink-primary)]"
+                      ? "text-[var(--ink-primary)]"
                       : "text-[var(--ink-muted)] hover:text-[var(--ink-primary)]",
                   )}
                 >
                   {item.label}
                   {isActive ? (
-                    <span className="absolute inset-x-3 bottom-3 block h-[2px] rounded-full bg-[var(--brand-rule)]" />
+                    <span className="absolute inset-x-4 bottom-4 block h-[2px] rounded-full bg-[var(--brand-rule)]" />
                   ) : null}
                 </Link>
               );
@@ -104,14 +104,10 @@ export default function TopNav() {
             <button
               type="button"
               onClick={() => setShowModelDemo(true)}
-              title="Interactive demonstration of the fine-tuned PaliGemma 3B satellite model"
-              className="flex items-center gap-1.5 rounded-md border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-400 hover:bg-cyan-500/20 transition-all shadow-sm active:scale-95"
+              title="Interactive demonstration of change detection"
+              className="flex items-center gap-1.5 rounded-lg bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-400 hover:bg-cyan-500/20 transition-all active:scale-95"
             >
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500" />
-              </span>
-              <span>Model Demo</span>
+              <span>Demo</span>
             </button>
             <ApiStatus />
             <ThemeToggle />

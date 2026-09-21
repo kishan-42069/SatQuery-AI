@@ -139,23 +139,11 @@ export default function ModelDemoModal({
         {/* Header */}
         <div className="flex items-start justify-between border-b border-[var(--rule-hairline)] pb-5">
           <div className="space-y-1">
-            <div className="flex items-center gap-2.5">
-              <span className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-500 border border-emerald-500/20">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                TRAINED & ACTIVE
-              </span>
-              <span className="rounded-full bg-cyan-500/10 px-2.5 py-0.5 text-[11px] font-mono text-cyan-400 border border-cyan-500/20">
-                QLoRA (4-bit)
-              </span>
-              <span className="font-mono text-[11px] text-[var(--ink-muted)]">
-                v0.1.0
-              </span>
-            </div>
             <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-[var(--ink-primary)]">
-              Fine-Tuned PaliGemma 3B — Live Model Demo
+              Ask a question about a satellite image
             </h2>
             <p className="text-xs sm:text-sm text-[var(--ink-muted)]">
-              Visual Question Answering (VQA) fine-tuned on the BigEarthNet Sentinel-2 satellite dataset.
+              Pick a scene, choose a question, and see how SatQuery AI reads it.
             </p>
           </div>
 
@@ -176,64 +164,13 @@ export default function ModelDemoModal({
           </button>
         </div>
 
-        {/* Model Metrics Strip */}
-        <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="rounded-lg border border-[var(--rule-hairline)] bg-[var(--surface-sunken)] p-3">
-            <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--ink-muted)]">
-              Base Architecture
-            </div>
-            <div className="mt-1 text-sm font-semibold text-[var(--ink-primary)] truncate">
-              PaliGemma 3B
-            </div>
-            <div className="text-[10px] text-[var(--ink-faint)]">
-              google/paligemma-3b-pt-224
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-[var(--rule-hairline)] bg-[var(--surface-sunken)] p-3">
-            <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--ink-muted)]">
-              Training Run
-            </div>
-            <div className="mt-1 text-sm font-semibold text-[var(--ink-primary)]">
-              3 Epochs (4,689 Steps)
-            </div>
-            <div className="text-[10px] text-[var(--ink-faint)]">
-              25,000 train / 10,000 val
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-[var(--rule-hairline)] bg-[var(--surface-sunken)] p-3">
-            <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--ink-muted)]">
-              Final Train Loss
-            </div>
-            <div className="mt-1 text-sm font-semibold text-emerald-500">
-              0.1576
-            </div>
-            <div className="text-[10px] text-[var(--ink-faint)]">
-              Best eval: 0.1583
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-[var(--rule-hairline)] bg-[var(--surface-sunken)] p-3">
-            <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--ink-muted)]">
-              Checkpoint
-            </div>
-            <div className="mt-1 text-sm font-semibold text-[var(--ink-primary)] truncate">
-              satquery-paligemma-lora
-            </div>
-            <div className="text-[10px] text-[var(--ink-faint)]">
-              Adapter: ~15.4 MB safetensors
-            </div>
-          </div>
-        </div>
-
         {/* Interactive Playground */}
         <div className="mt-6 grid grid-cols-1 md:grid-cols-12 gap-6">
           {/* Left Column: Sample & Questions */}
           <div className="md:col-span-6 space-y-4">
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--ink-primary)] mb-2">
-                1. Select Sample Satellite Tile
+                1. Pick a scene
               </label>
               <div className="grid grid-cols-3 gap-2">
                 {[
@@ -277,7 +214,7 @@ export default function ModelDemoModal({
 
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--ink-primary)] mb-2">
-                2. Select or Type Question
+                2. Ask a question
               </label>
               <div className="flex flex-wrap gap-1.5 mb-2.5">
                 {[
@@ -293,7 +230,7 @@ export default function ModelDemoModal({
                       setPrompt(q);
                       runInference(q);
                     }}
-                    className="rounded-full border border-[var(--rule-hairline)] bg-[var(--surface-sunken)] px-3 py-1 text-[11px] text-[var(--ink-muted)] hover:text-[var(--ink-primary)] hover:border-[var(--brand-deep)] transition-colors text-left"
+                    className="rounded-lg border border-[var(--rule-hairline)] bg-[var(--surface-sunken)] px-3 py-1 text-[11px] text-[var(--ink-muted)] hover:text-[var(--ink-primary)] hover:border-[var(--brand-deep)] transition-colors text-left"
                   >
                     {q}
                   </button>
@@ -330,7 +267,7 @@ export default function ModelDemoModal({
                       strokeLinejoin="round"
                     />
                   </svg>
-                  Run Fine-Tuned Model Inference
+                  Ask SatQuery AI
                 </>
               )}
             </Button>
@@ -341,16 +278,16 @@ export default function ModelDemoModal({
             <div className="flex items-center justify-between border-b border-[var(--rule-hairline)] pb-3 mb-3">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold uppercase tracking-wider text-[var(--ink-primary)]">
-                  Model Output
+                  Answer
                 </span>
                 {result && (
                   <span className="rounded bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] text-emerald-500">
-                    ⚡ {result.latency_ms} ms
+                    {result.latency_ms} ms
                   </span>
                 )}
               </div>
               <span className="font-mono text-[10px] text-[var(--ink-faint)]">
-                VLM Inference Engine
+
               </span>
             </div>
 
@@ -364,7 +301,7 @@ export default function ModelDemoModal({
               <div className="flex-1 flex flex-col items-center justify-center py-10 space-y-3">
                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--brand-deep)] border-t-transparent" />
                 <p className="font-mono text-xs text-[var(--ink-muted)]">
-                  Executing forward pass with QLoRA adapter…
+                  Reading the image…
                 </p>
               </div>
             )}
@@ -384,7 +321,7 @@ export default function ModelDemoModal({
                   Ready to test
                 </p>
                 <p className="text-[11px] max-w-xs text-[var(--ink-faint)]">
-                  Click &ldquo;Run Fine-Tuned Model Inference&rdquo; or pick one of the sample prompt chips on the left to see the model response.
+                  Pick a scene and a question on the left, then ask — the answer appears here.
                 </p>
               </div>
             )}
@@ -417,10 +354,6 @@ export default function ModelDemoModal({
                   )}
                 </div>
 
-                <div className="pt-3 border-t border-[var(--rule-hairline)] text-[10px] font-mono text-[var(--ink-faint)] flex items-center justify-between">
-                  <span>Architecture: 4-bit QLoRA PaliGemma 3B</span>
-                  <span>Weights: data/weights/satquery-paligemma-lora</span>
-                </div>
               </div>
             )}
           </div>
@@ -429,7 +362,7 @@ export default function ModelDemoModal({
         {/* Footer */}
         <div className="mt-6 pt-4 border-t border-[var(--rule-hairline)] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[var(--ink-muted)]">
           <div>
-            Powered by <strong>SatQuery AI</strong> specialist agent orchestration & fine-tuned VLM.
+            Powered by <strong>SatQuery AI</strong>.
           </div>
           <div className="flex items-center gap-3">
             <a

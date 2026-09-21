@@ -100,7 +100,9 @@ const VQA_PROMPTS = [
 
 /* ─── Component ──────────────────────────────────────────────────── */
 export default function ModelDemoPage() {
-  const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null);
+  // Fetched on mount and kept for the API surface; the page no longer
+  // renders training telemetry, so nothing reads it today.
+  const [, setModelInfo] = useState<ModelInfo | null>(null);
 
   // Mode: "change" = demo tiles, "upload" = user files, "vqa" = single-image
   const [mode, setMode] = useState<"change" | "upload" | "vqa">("change");
@@ -241,13 +243,9 @@ export default function ModelDemoPage() {
           <span className="text-sm font-medium">Model Demo</span>
         </div>
         <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 font-mono text-[11px] text-emerald-400">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" /> TRAINED &amp; LIVE
-          </span>
-          <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 font-mono text-[11px] text-cyan-400">4-bit QLoRA</span>
           <Link
             href="/analyze"
-            className="rounded-full px-4 py-1.5 text-xs font-medium transition-all hover:brightness-110"
+            className="rounded-lg px-4 py-1.5 text-xs font-medium transition-all hover:brightness-110"
             style={{ background: "linear-gradient(120deg, var(--accent), color-mix(in srgb, var(--accent) 55%, var(--accent-warm)))", color: "var(--background)" }}
           >
             Open Workspace →
@@ -255,7 +253,7 @@ export default function ModelDemoPage() {
         </div>
       </header>
 
-      {/* ── Hero: SIH Goal + Metrics ── */}
+      {/* ── Hero ── */}
       <div
         className="px-6 py-7 border-b"
         style={{ borderColor: "var(--rule-hairline)", background: "linear-gradient(135deg, color-mix(in srgb, var(--accent) 5%, var(--surface)), var(--surface))" }}
@@ -263,11 +261,6 @@ export default function ModelDemoPage() {
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col sm:flex-row sm:items-end gap-4 justify-between">
             <div>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="rounded border border-violet-500/30 bg-violet-500/10 px-2.5 py-0.5 font-mono text-[10px] text-violet-400 uppercase tracking-wider">
-                  SIH 2024 Problem Statement
-                </span>
-              </div>
               <h1 className="text-3xl font-bold tracking-tight" style={{ fontFamily: "var(--font-grotesk-display)" }}>
                 Satellite Image{" "}
                 <span style={{ background: "linear-gradient(100deg, var(--accent), var(--accent-warm))", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>
@@ -275,30 +268,11 @@ export default function ModelDemoPage() {
                 </span>
               </h1>
               <p className="mt-1 text-sm max-w-2xl" style={{ color: "var(--ink-muted)" }}>
-                Given two satellite images of the <strong>same location</strong> at different times,
-                the model identifies <strong>what changed</strong> — urban expansion, deforestation,
-                water body shifts, infrastructure growth.
+                Compare satellite images captured at different points in time to identify meaningful changes in the same geographic area.
               </p>
             </div>
           </div>
 
-          {/* Metrics strip */}
-          <div className="mt-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            {[
-              { label: "Base Model", value: "PaliGemma 3B", sub: "Fine-tuned VLM" },
-              { label: "Method", value: "4-bit QLoRA", sub: "LoRA r=16, α=32" },
-              { label: "Dataset", value: modelInfo?.dataset ?? "BigEarthNet", sub: "Sentinel-2" },
-              { label: "Steps", value: (modelInfo?.total_steps ?? 4689).toLocaleString(), sub: `${modelInfo?.epochs ?? 3} epochs` },
-              { label: "Train Loss", value: (modelInfo?.final_train_loss ?? 0.1576).toFixed(4), sub: `Eval: ${(modelInfo?.best_eval_loss ?? 0.1583).toFixed(4)}`, green: true },
-              { label: "Train Samples", value: ((modelInfo?.train_samples ?? 25000) / 1000).toFixed(0) + "k", sub: "tiles" },
-            ].map((m) => (
-              <div key={m.label} className="rounded-xl border p-3" style={{ borderColor: "var(--rule-hairline)", background: "var(--surface-sunken)" }}>
-                <div className="font-mono text-[10px] uppercase tracking-wider" style={{ color: "var(--ink-muted)" }}>{m.label}</div>
-                <div className="mt-1 text-base font-bold" style={{ color: (m as any).green ? "rgb(52 211 153)" : "var(--ink-primary)" }}>{m.value}</div>
-                <div className="text-[10px] truncate" style={{ color: "var(--ink-faint)" }}>{m.sub}</div>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
 
@@ -307,9 +281,9 @@ export default function ModelDemoPage() {
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex gap-0">
             {([
-              { id: "change", label: "🛰️  Demo: Change Detection", badge: "DEMO" },
-              { id: "upload", label: "📤  Upload Your Images",     badge: "YOUR DATA" },
-              { id: "vqa",    label: "🔍  Single Image VQA",       badge: null },
+              { id: "change", label: "Demo: Change Detection" },
+              { id: "upload", label: "Upload Your Images" },
+              { id: "vqa",    label: "Single Image" },
             ] as const).map((tab) => (
               <button
                 key={tab.id}
@@ -321,13 +295,6 @@ export default function ModelDemoPage() {
                 }}
               >
                 {tab.label}
-                {tab.badge && (
-                  <span className={`rounded px-1.5 py-0.5 font-mono text-[9px] border ${
-                    tab.id === "upload"
-                      ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
-                      : "bg-violet-500/15 border-violet-500/30 text-violet-400"
-                  }`}>{tab.badge}</span>
-                )}
               </button>
             ))}
           </div>
@@ -352,7 +319,7 @@ export default function ModelDemoPage() {
                   style={{ background: "var(--surface-sunken)", borderBottom: "1px solid var(--rule-hairline)" }}
                 >
                   <div className="flex items-center gap-2">
-                    <span className="rounded bg-blue-500/15 border border-blue-500/30 px-2 py-0.5 font-mono text-[10px] text-blue-400 font-semibold">T1 · BEFORE</span>
+                    <span className="font-mono text-[10px] font-semibold text-blue-400">Before</span>
                     <span className="text-xs font-medium" style={{ color: "var(--ink-primary)" }}>{t1.label}</span>
                   </div>
                   <span className="font-mono text-[10px]" style={{ color: "var(--ink-faint)" }}>{t1.modality} · {t1.date}</span>
@@ -382,8 +349,8 @@ export default function ModelDemoPage() {
                 {/* Main image */}
                 <div className="relative aspect-[4/3] w-full">
                   <Image src={t1.image} alt={t1.label} fill className="object-cover" sizes="600px" />
-                  <div className="absolute top-2 left-2 rounded bg-blue-600/80 px-2 py-0.5 font-mono text-[11px] text-white font-bold backdrop-blur-sm">
-                    T1 · {t1.date}
+                  <div className="absolute top-2 left-2 font-mono text-[11px] font-bold text-white" style={{ textShadow: "0 1px 4px rgba(0,0,0,0.9)" }}>
+                    {t1.date}
                   </div>
                 </div>
               </div>
@@ -395,7 +362,7 @@ export default function ModelDemoPage() {
                   style={{ background: "var(--surface-sunken)", borderBottom: "1px solid var(--rule-hairline)" }}
                 >
                   <div className="flex items-center gap-2">
-                    <span className="rounded bg-orange-500/15 border border-orange-500/30 px-2 py-0.5 font-mono text-[10px] text-orange-400 font-semibold">T2 · AFTER</span>
+                    <span className="font-mono text-[10px] font-semibold text-orange-400">After</span>
                     <span className="text-xs font-medium" style={{ color: "var(--ink-primary)" }}>{t2.label}</span>
                   </div>
                   <span className="font-mono text-[10px]" style={{ color: "var(--ink-faint)" }}>{t2.modality} · {t2.date}</span>
@@ -425,8 +392,8 @@ export default function ModelDemoPage() {
                 {/* Main image */}
                 <div className="relative aspect-[4/3] w-full">
                   <Image src={t2.image} alt={t2.label} fill className="object-cover" sizes="600px" />
-                  <div className="absolute top-2 left-2 rounded bg-orange-600/80 px-2 py-0.5 font-mono text-[11px] text-white font-bold backdrop-blur-sm">
-                    T2 · {t2.date}
+                  <div className="absolute top-2 left-2 font-mono text-[11px] font-bold text-white" style={{ textShadow: "0 1px 4px rgba(0,0,0,0.9)" }}>
+                    {t2.date}
                   </div>
                 </div>
               </div>
@@ -482,7 +449,7 @@ export default function ModelDemoPage() {
                           {INTENSITY_BADGE[cdResult.change_intensity]?.label}
                         </span>
                         <span className="rounded bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 font-mono text-[10px] text-emerald-400">
-                          ⚡ {cdResult.latency_ms.toFixed(0)} ms
+                          {cdResult.latency_ms.toFixed(0)} ms
                         </span>
                       </>
                     )}
@@ -502,7 +469,7 @@ export default function ModelDemoPage() {
                       <div className="relative h-16 w-16">
                         <div className="absolute inset-0 rounded-full border-2 animate-spin" style={{ borderColor: "var(--accent) transparent transparent transparent" }} />
                         <div className="absolute inset-2 rounded-full border-2 animate-spin" style={{ borderColor: "color-mix(in srgb, var(--accent) 50%, transparent) transparent transparent transparent", animationDirection: "reverse", animationDuration: "0.8s" }} />
-                        <div className="absolute inset-0 flex items-center justify-center text-lg">🛰️</div>
+                        <div className="absolute inset-0 flex items-center justify-center text-lg"></div>
                       </div>
                       <div className="text-center">
                         <p className="font-mono text-xs" style={{ color: "var(--ink-muted)" }}>
@@ -586,7 +553,7 @@ export default function ModelDemoPage() {
             {/* Empty state */}
             {!cdResult && !cdRunning && !cdError && (
               <div className="rounded-2xl border flex flex-col items-center justify-center py-16 gap-4 text-center" style={{ borderColor: "var(--rule-hairline)", borderStyle: "dashed", background: "var(--surface-sunken)" }}>
-                <div className="text-4xl">🛰️</div>
+                <div className="text-4xl"></div>
                 <div>
                   <p className="text-sm font-medium" style={{ color: "var(--ink-primary)" }}>Ready for Change Detection</p>
                   <p className="mt-1 text-xs max-w-sm" style={{ color: "var(--ink-faint)" }}>
@@ -594,7 +561,7 @@ export default function ModelDemoPage() {
                   </p>
                 </div>
                 <p className="font-mono text-[10px] px-4 py-2 rounded-lg border" style={{ borderColor: "var(--rule-hairline)", color: "var(--ink-faint)", background: "var(--surface)" }}>
-                  💡 Try: T1 = ISRO 2022 vs T2 = ISRO 2026 — real urban expansion is visible!
+                  Try: T1 = ISRO 2022 vs T2 = ISRO 2026 — real urban expansion is visible!
                 </p>
               </div>
             )}
@@ -625,16 +592,16 @@ export default function ModelDemoPage() {
                   <div className="w-full h-full flex flex-col items-center gap-3">
                     <div className="relative aspect-[4/3] w-full rounded-lg overflow-hidden border border-[var(--rule-hairline)]">
                       <Image src={upT1Preview} alt="T1 Preview" fill className="object-cover" />
-                      <div className="absolute top-2 left-2 rounded bg-blue-600/80 px-2 py-0.5 font-mono text-[11px] text-white font-bold backdrop-blur-sm">T1 · BEFORE</div>
+                      <div className="absolute top-2 left-2 font-mono text-[11px] font-bold text-white" style={{ textShadow: "0 1px 4px rgba(0,0,0,0.9)" }}>Before</div>
                     </div>
                     <button onClick={() => { setUpT1File(null); setUpT1Preview(null); }} className="text-xs text-red-400 hover:underline">Remove Image</button>
                   </div>
                 ) : (
                   <div className="text-center">
-                    <div className="text-3xl mb-2">📤</div>
+                    <div className="text-3xl mb-2"></div>
                     <p className="text-sm font-medium mb-1">T1 (Before) Image</p>
                     <p className="text-xs text-[var(--ink-muted)] mb-3">Drag & drop or click to upload</p>
-                    <button onClick={() => t1InputRef.current?.click()} className="rounded-full bg-[var(--surface)] border border-[var(--rule-hairline)] px-4 py-1.5 text-xs hover:border-[var(--ink-muted)]">Select File</button>
+                    <button onClick={() => t1InputRef.current?.click()} className="rounded-lg bg-[var(--surface)] border border-[var(--rule-hairline)] px-4 py-1.5 text-xs hover:border-[var(--ink-muted)]">Select File</button>
                   </div>
                 )}
               </div>
@@ -657,16 +624,16 @@ export default function ModelDemoPage() {
                   <div className="w-full h-full flex flex-col items-center gap-3">
                     <div className="relative aspect-[4/3] w-full rounded-lg overflow-hidden border border-[var(--rule-hairline)]">
                       <Image src={upT2Preview} alt="T2 Preview" fill className="object-cover" />
-                      <div className="absolute top-2 left-2 rounded bg-orange-600/80 px-2 py-0.5 font-mono text-[11px] text-white font-bold backdrop-blur-sm">T2 · AFTER</div>
+                      <div className="absolute top-2 left-2 font-mono text-[11px] font-bold text-white" style={{ textShadow: "0 1px 4px rgba(0,0,0,0.9)" }}>After</div>
                     </div>
                     <button onClick={() => { setUpT2File(null); setUpT2Preview(null); }} className="text-xs text-red-400 hover:underline">Remove Image</button>
                   </div>
                 ) : (
                   <div className="text-center">
-                    <div className="text-3xl mb-2">📤</div>
+                    <div className="text-3xl mb-2"></div>
                     <p className="text-sm font-medium mb-1">T2 (After) Image</p>
                     <p className="text-xs text-[var(--ink-muted)] mb-3">Drag & drop or click to upload</p>
-                    <button onClick={() => t2InputRef.current?.click()} className="rounded-full bg-[var(--surface)] border border-[var(--rule-hairline)] px-4 py-1.5 text-xs hover:border-[var(--ink-muted)]">Select File</button>
+                    <button onClick={() => t2InputRef.current?.click()} className="rounded-lg bg-[var(--surface)] border border-[var(--rule-hairline)] px-4 py-1.5 text-xs hover:border-[var(--ink-muted)]">Select File</button>
                   </div>
                 )}
               </div>
@@ -710,7 +677,7 @@ export default function ModelDemoPage() {
                           {INTENSITY_BADGE[upResult.change_intensity]?.label}
                         </span>
                         <span className="rounded bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 font-mono text-[10px] text-emerald-400">
-                          ⚡ {upResult.latency_ms.toFixed(0)} ms
+                          {upResult.latency_ms.toFixed(0)} ms
                         </span>
                       </>
                     )}
@@ -730,7 +697,7 @@ export default function ModelDemoPage() {
                       <div className="relative h-16 w-16">
                         <div className="absolute inset-0 rounded-full border-2 animate-spin" style={{ borderColor: "var(--accent) transparent transparent transparent" }} />
                         <div className="absolute inset-2 rounded-full border-2 animate-spin" style={{ borderColor: "color-mix(in srgb, var(--accent) 50%, transparent) transparent transparent transparent", animationDirection: "reverse", animationDuration: "0.8s" }} />
-                        <div className="absolute inset-0 flex items-center justify-center text-lg">🛰️</div>
+                        <div className="absolute inset-0 flex items-center justify-center text-lg"></div>
                       </div>
                       <div className="text-center">
                         <p className="font-mono text-xs" style={{ color: "var(--ink-muted)" }}>
@@ -862,7 +829,7 @@ export default function ModelDemoPage() {
                 <div className="flex flex-wrap gap-1.5 mb-4">
                   {VQA_PROMPTS.map((q, i) => (
                     <button key={i} onClick={() => runVqa(q)}
-                      className="rounded-full border px-3 py-1 text-[11px] transition-all hover:scale-[1.02] active:scale-95 text-left"
+                      className="rounded-lg border px-3 py-1 text-[11px] transition-all hover:scale-[1.02] active:scale-95 text-left"
                       style={{ borderColor: vqaPrompt === q ? "var(--accent)" : "var(--rule-hairline)", background: vqaPrompt === q ? "color-mix(in srgb, var(--accent) 12%, var(--surface-sunken))" : "var(--surface-sunken)", color: vqaPrompt === q ? "var(--accent)" : "var(--ink-muted)" }}>
                       {q}
                     </button>
@@ -877,14 +844,14 @@ export default function ModelDemoPage() {
                 <button onClick={() => runVqa()} disabled={vqaRunning || !vqaPrompt.trim()}
                   className="mt-3 w-full rounded-xl py-3 text-sm font-semibold flex items-center justify-center gap-2 transition-all hover:brightness-110 disabled:opacity-60 disabled:cursor-not-allowed"
                   style={{ background: "linear-gradient(120deg, var(--accent), color-mix(in srgb, var(--accent) 55%, var(--accent-warm)))", color: "var(--background)" }}>
-                  {vqaRunning ? <><span className="h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin" />Running…</> : <>⚡ Run VQA Inference</>}
+                  {vqaRunning ? <><span className="h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin" />Running…</> : <>Ask SatQuery AI</>}
                 </button>
               </div>
 
               <div className="flex-1 rounded-2xl border flex flex-col" style={{ borderColor: "var(--rule-hairline)", background: "var(--surface)", minHeight: "200px" }}>
                 <div className="flex items-center justify-between px-5 py-3 border-b" style={{ borderColor: "var(--rule-hairline)" }}>
-                  <span className="font-mono text-[11px] font-semibold uppercase tracking-wider">Model Output</span>
-                  {vqaResult && <span className="rounded bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 font-mono text-[10px] text-emerald-400">⚡ {vqaResult.latency_ms.toFixed(0)} ms</span>}
+                  <span className="font-mono text-[11px] font-semibold uppercase tracking-wider">Answer</span>
+                  {vqaResult && <span className="rounded bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 font-mono text-[10px] text-emerald-400">{vqaResult.latency_ms.toFixed(0)} ms</span>}
                 </div>
                 <div className="flex-1 p-5 overflow-y-auto">
                   {vqaError && <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">{vqaError}</div>}
@@ -918,10 +885,6 @@ export default function ModelDemoPage() {
         )}
       </div>
 
-      <footer className="border-t px-6 py-4 flex items-center justify-between text-xs" style={{ borderColor: "var(--rule-hairline)", color: "var(--ink-faint)" }}>
-        <span>SatQuery AI · Fine-tuned PaliGemma 3B · <span className="font-mono">Train loss 0.1576 · Eval loss 0.1583</span></span>
-        <Link href="/analyze" className="hover:underline" style={{ color: "var(--ink-muted)" }}>Open full analysis workspace →</Link>
-      </footer>
     </div>
   );
 }
