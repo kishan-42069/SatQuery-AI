@@ -11,6 +11,9 @@ import { useEarthTextures } from "@/hooks/useEarthTextures";
 import { earthMeshRef } from "@/lib/earthMeshRef";
 import { noiseGLSL } from "@/lib/shaders/noise.glsl";
 
+/** The patch plane's own outward axis, mapped onto the surface normal. */
+const LOCAL_Z = new THREE.Vector3(0, 0, 1);
+
 const PATCH_SIZE = 0.62;
 const SURFACE_OFFSET = 1.004;
 
@@ -331,6 +334,7 @@ export default function ScanPatch() {
   const worldPos = useMemo(() => new THREE.Vector3(), []);
   const worldDir = useMemo(() => new THREE.Vector3(), []);
   const localDir = useMemo(() => new THREE.Vector3(), []);
+  const outward = useMemo(() => new THREE.Vector3(), []);
   const invMatrix = useMemo(() => new THREE.Matrix4(), []);
 
   const uniforms = useMemo(
@@ -381,8 +385,24 @@ export default function ScanPatch() {
     scratch.normalize().multiplyScalar(SURFACE_OFFSET);
     if (groupRef.current) {
       groupRef.current.position.copy(scratch);
-      groupRef.current.lookAt(0, 0, 0);
-      groupRef.current.rotateY(Math.PI);
+
+      // Orient in the PARENT's frame, not via lookAt.
+      //
+      // Object3D.lookAt(0, 0, 0) aims at the WORLD origin, but the patch's
+      // position above is set in GlobeSystem's local frame, where the origin
+      // IS the planet's centre. Those two only coincide while the globe sits
+      // at the world origin — and GlobeSystem moves it constantly
+      // (shell.position.y as the hero rises, g.position during travel and
+      // fly-to-place). With an offset live, the patch aimed at a point that
+      // was not the centre and tilted off tangent, in the worst case
+      // standing perpendicular to the ground like a fin.
+      //
+      // The outward radial direction in this frame is just the normalised
+      // local position, so build the rotation from it directly: local +Z
+      // maps onto the outward normal, which puts the plane tangent to the
+      // surface no matter where the globe has been moved to.
+      outward.copy(scratch).normalize();
+      groupRef.current.quaternion.setFromUnitVectors(LOCAL_Z, outward);
 
       // Where the patch actually sits, in world space, right now —
       // updateWorldMatrix forces this and its ancestors (GlobeSystem's
