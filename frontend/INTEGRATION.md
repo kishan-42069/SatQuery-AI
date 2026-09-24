@@ -172,7 +172,6 @@ src/
       layout.tsx          shared chrome + scroll container
       analyze/            single-image workspace
       compare/            bi-temporal change detection
-      datasets/           asset catalogue + ingest
       reports/            run history + export
   lib/api/
     types.ts              mirrors app/schemas/*.py — keep in sync

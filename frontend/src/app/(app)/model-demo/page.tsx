@@ -557,7 +557,7 @@ export default function ModelDemoPage() {
                 <div>
                   <p className="text-sm font-medium" style={{ color: "var(--ink-primary)" }}>Ready for Change Detection</p>
                   <p className="mt-1 text-xs max-w-sm" style={{ color: "var(--ink-faint)" }}>
-                    Select a <span className="text-blue-400">T1 (Before)</span> and <span className="text-orange-400">T2 (After)</span> image above, then click <strong>Detect Changes</strong>. The model will compare both images and identify what changed.
+                    Select a <span className="text-blue-400">Before</span> and <span className="text-orange-400">After</span> image above, then click <strong>Detect Changes</strong>. The model will compare both images and identify what changed.
                   </p>
                 </div>
                 <p className="font-mono text-[10px] px-4 py-2 rounded-lg border" style={{ borderColor: "var(--rule-hairline)", color: "var(--ink-faint)", background: "var(--surface)" }}>

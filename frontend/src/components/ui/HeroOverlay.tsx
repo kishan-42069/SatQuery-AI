@@ -15,7 +15,6 @@ import { apiFetch } from "@/lib/api/client";
 const WORKSPACE_LINKS = [
   { href: "/analyze", label: "Analyze" },
   { href: "/compare", label: "Compare" },
-  { href: "/datasets", label: "Datasets" },
   { href: "/reports", label: "Reports" },
 ];
 

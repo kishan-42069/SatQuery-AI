@@ -78,8 +78,8 @@ function AnalyzeWorkspace() {
   const [activeFindingId, setActiveFindingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Datasets links here as /analyze?asset=<id>. Applied once, so the user's
-  // later selections aren't reverted by the param still sitting in the URL.
+  // An asset can be selected through the URL. Apply it once so later
+  // selections aren't reverted by the param still sitting in the URL.
   const searchParams = useSearchParams();
   const requestedAssetId = searchParams.get("asset");
   /** A question typed on the landing page, carried through the hero's
@@ -241,4 +241,3 @@ function AnalyzeWorkspace() {
     </div>
   );
 }
-

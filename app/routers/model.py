@@ -558,8 +558,8 @@ async def change_detect_upload(
     """
     t0 = time.perf_counter()
 
-    t1_bytes = await _read_and_validate_upload(t1_image, "T1 (Before) image")
-    t2_bytes = await _read_and_validate_upload(t2_image, "T2 (After) image")
+    t1_bytes = await _read_and_validate_upload(t1_image, "Before image")
+    t2_bytes = await _read_and_validate_upload(t2_image, "After image")
 
     t1_pil = _bytes_to_pil(t1_bytes, "T1")
     t2_pil = _bytes_to_pil(t2_bytes, "T2")

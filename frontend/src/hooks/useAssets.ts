@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Asset catalogue loading + upload, shared by Analyze, Compare and Datasets.
+ * Asset loading and upload, shared by Analyze and Compare.
  *
  * Upload is optimistic-free on purpose: `POST /assets/upload` runs rasterio
  * metadata extraction server-side, so the record that comes back carries
