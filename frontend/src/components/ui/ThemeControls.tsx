@@ -65,9 +65,6 @@ export default function ThemeControls() {
         }}
       >
         <span>{mode === "dark" ? "Dark" : "Light"}</span>
-        <span style={{ color: "var(--accent)" }}>
-          {mode === "dark" ? "◐" : "◑"}
-        </span>
       </button>
 
       <div className="relative">

@@ -1,42 +1,41 @@
 import type { Metadata } from "next";
-import { Instrument_Serif, Plus_Jakarta_Sans } from "next/font/google";
+import { Instrument_Sans, Manrope } from "next/font/google";
 import "./globals.css";
 
 import SpaceBackdrop from "@/components/app/SpaceBackdrop";
 import ThemeSync from "@/components/app/ThemeSync";
 
 /**
- * The display face for the headline.
+ * The primary reading face for the product.
  *
- * next/font downloads and self-hosts the files at build time, so this keeps
- * the original "no font CDN at runtime" constraint — nothing is fetched from
- * a third party when the page loads, and there's no layout shift or
- * render-blocking stylesheet. A real high-contrast serif rather than
- * whatever serif the OS happens to supply.
- *
- * Both cuts ship: the headline's second line is set in the true italic, and
- * a real italic is a different drawing of the letters — not the upright
- * sheared over, which is what the browser synthesises if the cut is absent.
+ * Manrope provides the calm, highly readable editorial base for the entire
+ * interface without leaning too technical or futuristic.
  */
-const display = Instrument_Serif({
+const primary = Manrope({
   subsets: ["latin"],
-  weight: "400",
-  style: ["normal", "italic"],
   display: "swap",
-  variable: "--font-display",
+  variable: "--font-primary",
 });
 
 /**
- * The masthead face. A geometric grotesque with a tall x-height, set very
- * large and tight — it is what carries the centred hero, while the serif
- * above stays available for editorial moments.
+ * The display face for headings and emphasis.
  *
- * Variable weight, so 500/700 cost nothing extra over 400: one file covers
- * the whole range instead of a request per cut.
+ * Instrument Sans keeps the hierarchy clean while staying modern and
+ * premium, without the sharper tech aesthetic of more rigid sans faces.
  */
-const sans = Plus_Jakarta_Sans({
+const display = Instrument_Sans({
   subsets: ["latin"],
   display: "swap",
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-display",
+});
+
+// Preserve the project’s existing CSS-variable naming so existing component
+// classes remain compatible while the global typography system is upgraded.
+const headingDisplay = Instrument_Sans({
+  subsets: ["latin"],
+  display: "swap",
+  weight: ["400", "500", "600", "700"],
   variable: "--font-sans-display",
 });
 
@@ -54,13 +53,9 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`h-full antialiased ${display.variable} ${sans.variable}`}
+      className={`h-full antialiased ${primary.variable} ${display.variable} ${headingDisplay.variable}`}
     >
       <body className="h-full">
-        {/* Both live in the root layout so they persist across navigation:
-            the theme must be applied before any route paints, and the sky
-            has to be the same DOM node on every screen or it visibly cuts
-            when you move between them. */}
         <ThemeSync />
         <SpaceBackdrop />
         {children}

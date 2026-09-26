@@ -199,24 +199,6 @@ export default function Earth() {
         </mesh>
       )}
 
-      <mesh scale={1.022}>
-        <sphereGeometry args={[1, 64, 64]} />
-        {/*
-          Normal blending on light backgrounds, additive in dark mode:
-          additive glow reads as a soft atmospheric limb against space, but
-          against the cream page it just adds white and hazes over.
-        */}
-        <atmosphereMaterial
-          uColor={new THREE.Color(t.atmosphere)}
-          uIntensity={t.atmosphereIntensity}
-          side={THREE.BackSide}
-          transparent
-          depthWrite={false}
-          blending={
-            mode === "dark" ? THREE.AdditiveBlending : THREE.NormalBlending
-          }
-        />
-      </mesh>
     </group>
   );
 }

@@ -110,7 +110,7 @@ export default function QueryComposer({
             disabled={disabled || busy}
             onClick={() => setText(suggestion)}
             className={cx(
-              "rounded-full border border-[var(--rule-hairline)] bg-[var(--surface)] px-3 py-1.5 text-xs",
+              "rounded-lg border border-[var(--rule-hairline)] bg-[var(--surface)] px-3 py-1.5 text-xs",
               "text-[var(--ink-muted)] transition-colors hover:border-[var(--rule-strong)] hover:text-[var(--ink-primary)]",
               "disabled:cursor-not-allowed disabled:opacity-50",
             )}

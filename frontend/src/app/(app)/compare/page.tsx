@@ -92,7 +92,7 @@ export default function ComparePage() {
       {!isLoading && assets.length < 2 ? (
         <EmptyState
           title="Change detection needs two images"
-          hint="Upload at least two observations of the same area, taken at different times. Ingest them from Datasets or the Analyze workspace."
+          hint="Upload at least two observations of the same area, taken at different times, from the Analyze workspace."
         />
       ) : (
         <>

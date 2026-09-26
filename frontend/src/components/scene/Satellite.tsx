@@ -230,6 +230,8 @@ function SatelliteBody() {
  * off-by-90° local rotation. Wide end sits on the surface.
  */
 const UP = new THREE.Vector3(0, 1, 0);
+/** The satellite body's own up axis, mapped onto the outward normal. */
+const LOCAL_UP = new THREE.Vector3(0, 1, 0);
 
 function ScanBeam() {
   const state = useSceneStore((s) => s.state);
@@ -318,16 +320,24 @@ function ScanBeam() {
 export default function Satellite() {
   const groupRef = useRef<THREE.Group>(null);
   const scratch = useMemo(() => new THREE.Vector3(), []);
+  const satUp = useMemo(() => new THREE.Vector3(), []);
 
   useFrame((clock) => {
     if (!groupRef.current) return;
     const t = clock.clock.elapsedTime;
     satellitePositionAt(t, scratch);
     groupRef.current.position.copy(scratch);
-    // Object3D.lookAt points local +Z at the target, so -90° about X maps
-    // the beam's local -Y onto +Z — i.e. straight down at Earth's centre.
-    groupRef.current.lookAt(0, 0, 0);
-    groupRef.current.rotateX(-Math.PI / 2);
+    // Same reason as <ScanPatch />: lookAt aims at the WORLD origin, while
+    // this position is in GlobeSystem's frame where the origin is the
+    // planet's centre. GlobeSystem offsets the globe (shell.position.y,
+    // g.position during travel), so those diverge and the satellite ends up
+    // pointing somewhere other than straight down.
+    //
+    // Map local +Y onto the outward radial direction instead, which leaves
+    // local -Y aimed at the centre — the orientation the body and its
+    // sensor are modelled around.
+    satUp.copy(scratch).normalize();
+    groupRef.current.quaternion.setFromUnitVectors(LOCAL_UP, satUp);
   });
 
   return (

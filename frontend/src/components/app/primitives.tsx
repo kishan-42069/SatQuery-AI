@@ -152,10 +152,12 @@ export function Pill({
 export function Button({
   children,
   variant = "primary",
+  size = "md",
   className,
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "secondary" | "ghost";
+  size?: "sm" | "md";
 }) {
   const variants = {
     primary:
@@ -166,14 +168,20 @@ export function Button({
       "bg-transparent text-[var(--ink-muted)] hover:text-[var(--ink-primary)] hover:bg-[var(--surface-sunken)] border-transparent",
   } as const;
 
+  const sizes = {
+    sm: "px-2.5 py-1 text-xs",
+    md: "px-3.5 py-2 text-sm",
+  } as const;
+
   return (
     <button
       {...props}
       className={cx(
-        "inline-flex items-center justify-center gap-2 rounded-md border px-3.5 py-2 text-sm font-medium transition-colors",
+        "inline-flex items-center justify-center gap-2 rounded-md border font-medium transition-colors",
         "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-deep)]",
         "disabled:cursor-not-allowed disabled:opacity-50",
         variants[variant],
+        sizes[size],
         className,
       )}
     >
