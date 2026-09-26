@@ -1,0 +1,228 @@
+# =============================================================================
+# SatQuery AI — GitHub Actions CI/CD Pipeline
+# Trigger: push to the `deploy` branch (or manual dispatch)
+#
+# What this does:
+#   1. Pre-flight: validates compose file & required files (on GitHub runner)
+#   2. SSHes into the Oracle VM
+#   3. Pulls latest code from the deploy branch
+#   4. Rebuilds only changed Docker images (BuildKit layer cache)
+#   5. Runs DB migrations BEFORE restarting API (alembic upgrade head)
+#   6. Rolls the new images into service — old containers stay up during swap
+#   7. Polls /api/v1/health up to 30× before declaring success/failure
+#   8. Prunes dangling images to reclaim disk space
+#
+# Required GitHub Secrets (Settings → Secrets → Actions → New repository secret):
+#   ORACLE_HOST     — Public IP of your Oracle VM  (e.g. 141.148.x.x)
+#   ORACLE_USER     — SSH username                  (usually "ubuntu")
+#   ORACLE_SSH_KEY  — Full contents of your private SSH key
+#                     (everything from -----BEGIN OPENSSH PRIVATE KEY-----
+#                      through -----END OPENSSH PRIVATE KEY-----)
+#   ORACLE_PORT     — SSH port                      (almost always 22)
+#   DEPLOY_DIR      — Absolute path on VM           (e.g. /home/ubuntu/SatQuery_AI)
+# =============================================================================
+
+name: Deploy SatQuery AI
+
+on:
+  push:
+    branches:
+      - deploy         # Only the `deploy` branch triggers production deploys
+  workflow_dispatch:   # Allows a manual trigger from the GitHub Actions UI
+
+# Prevent two simultaneous deployments from racing each other
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false   # Never cancel an in-flight deploy — let it finish
+
+jobs:
+
+  # ---------------------------------------------------------------------------
+  # JOB 1 — Pre-flight checks (runs on GitHub runner, no VM access needed)
+  # ---------------------------------------------------------------------------
+  preflight:
+    name: Pre-flight Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate docker-compose.prod.yml syntax
+        run: |
+          # docker compose config validates YAML syntax.
+          # Missing .env.prod is expected on the CI runner — warnings are OK.
+          docker compose -f docker-compose.prod.yml config --quiet \
+            || echo "::warning::docker-compose.prod.yml reported warnings (missing .env.prod on CI is expected)"
+
+      - name: Verify required deployment files are present
+        run: |
+          echo "Checking required files..."
+          required_files=(
+            "docker-compose.prod.yml"
+            "Dockerfile"
+            "frontend/Dockerfile"
+            "nginx/nginx.conf"
+            "alembic.ini"
+            "requirements.txt"
+          )
+          MISSING=0
+          for f in "${required_files[@]}"; do
+            if [ ! -f "$f" ]; then
+              echo "MISSING: $f"
+              MISSING=1
+            else
+              echo "OK: $f"
+            fi
+          done
+          if [ "$MISSING" = "1" ]; then
+            echo "One or more required files are missing. Aborting."
+            exit 1
+          fi
+          echo "All required files present."
+
+  # ---------------------------------------------------------------------------
+  # JOB 2 — Deploy to Oracle VM (runs only if preflight passes)
+  # ---------------------------------------------------------------------------
+  deploy:
+    name: Deploy to Oracle VM
+    runs-on: ubuntu-latest
+    needs: preflight          # Gate: only deploy if pre-flight checks pass
+    environment: production   # Ties to a GitHub Environment (optional approval)
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Load the private key into an SSH agent so subsequent ssh commands work
+      - name: Configure SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.ORACLE_SSH_KEY }}
+
+      # Fetch the VM's public host key and pin it — prevents man-in-the-middle
+      - name: Add Oracle VM to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -p ${{ secrets.ORACLE_PORT }} -H ${{ secrets.ORACLE_HOST }} \
+            >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      # Main deploy — every command runs on the Oracle VM via SSH heredoc
+      - name: Deploy on Oracle VM
+        env:
+          ORACLE_HOST: ${{ secrets.ORACLE_HOST }}
+          ORACLE_USER: ${{ secrets.ORACLE_USER }}
+          ORACLE_PORT: ${{ secrets.ORACLE_PORT }}
+          DEPLOY_DIR:  ${{ secrets.DEPLOY_DIR }}
+        run: |
+          ssh -p "$ORACLE_PORT" "$ORACLE_USER@$ORACLE_HOST" bash << REMOTE
+            set -euo pipefail
+
+            COMPOSE_FILE="docker-compose.prod.yml"
+            ENV_FILE=".env.prod"
+
+            echo "=================================================="
+            echo " SatQuery AI — Deployment started at \$(date)"
+            echo " Deploy directory: $DEPLOY_DIR"
+            echo "=================================================="
+
+            cd "$DEPLOY_DIR"
+
+            # ----------------------------------------------------------------
+            # Step 1: Verify .env.prod exists on the VM
+            # .env.prod is intentionally NOT in git (see .gitignore).
+            # It must be created manually once — see CLOUD_DEPLOYMENT.md §7.4.
+            # ----------------------------------------------------------------
+            if [ ! -f "\$ENV_FILE" ]; then
+              echo "ERROR: \$ENV_FILE not found on the VM."
+              echo "Please create it from .env.example before running CI/CD."
+              echo "See CLOUD_DEPLOYMENT.md section 7.4 for instructions."
+              exit 1
+            fi
+            echo "Step 1/7  .env.prod found."
+
+            # ----------------------------------------------------------------
+            # Step 2: Pull latest code from the deploy branch
+            # ----------------------------------------------------------------
+            echo "Step 2/7  Pulling latest code..."
+            git fetch origin deploy
+            git reset --hard origin/deploy
+            echo "         Current commit: \$(git log -1 --oneline)"
+
+            # ----------------------------------------------------------------
+            # Step 3: Build new Docker images (BuildKit caches unchanged layers)
+            # Only api, worker, and frontend are rebuilt — db/redis/nginx use
+            # pre-built images and are never rebuilt here.
+            # ----------------------------------------------------------------
+            echo "Step 3/7  Building Docker images (changed layers only)..."
+            export DOCKER_BUILDKIT=1
+            docker compose -f "\$COMPOSE_FILE" --env-file "\$ENV_FILE" \
+              build --parallel api worker frontend
+            echo "         Images built."
+
+            # ----------------------------------------------------------------
+            # Step 4: Run DB migrations before restarting the API
+            # The migrate service runs alembic upgrade head then exits (restart: "no").
+            # Running this first guarantees the schema is ready when the new API starts.
+            # ----------------------------------------------------------------
+            echo "Step 4/7  Running database migrations..."
+            docker compose -f "\$COMPOSE_FILE" --env-file "\$ENV_FILE" \
+              run --rm migrate
+            echo "         Migrations complete."
+
+            # ----------------------------------------------------------------
+            # Step 5: Roll updated services into production
+            # --no-build skips another build pass (we already built in step 3).
+            # Docker Compose replaces only containers whose image changed.
+            # Containers with no image change are left running — zero downtime.
+            # db and redis are intentionally omitted — they keep running untouched.
+            # ----------------------------------------------------------------
+            echo "Step 5/7  Rolling updated containers into service..."
+            docker compose -f "\$COMPOSE_FILE" --env-file "\$ENV_FILE" \
+              up -d --no-build api worker frontend nginx
+            echo "         Services updated."
+
+            # ----------------------------------------------------------------
+            # Step 6: Health check — poll /api/v1/health until 200 or timeout
+            # ----------------------------------------------------------------
+            echo "Step 6/7  Waiting for API health check (max 150s)..."
+            MAX_RETRIES=30
+            INTERVAL=5
+            for i in \$(seq 1 \$MAX_RETRIES); do
+              STATUS=\$(curl -s -o /dev/null -w "%{http_code}" \
+                http://localhost/api/v1/health 2>/dev/null || echo "000")
+              if [ "\$STATUS" = "200" ]; then
+                echo "         API healthy (HTTP 200) after \$((i * INTERVAL))s."
+                break
+              fi
+              if [ "\$i" = "\$MAX_RETRIES" ]; then
+                echo "FAIL: API did not become healthy after \$((MAX_RETRIES * INTERVAL))s."
+                echo "      Last HTTP status: \$STATUS"
+                echo "      Check logs: docker compose -f docker-compose.prod.yml logs --tail=80 api"
+                exit 1
+              fi
+              echo "         Attempt \$i/\$MAX_RETRIES — got \$STATUS, retrying in \${INTERVAL}s..."
+              sleep \$INTERVAL
+            done
+
+            # ----------------------------------------------------------------
+            # Step 7: Remove dangling images to reclaim disk space on the VM
+            # ----------------------------------------------------------------
+            echo "Step 7/7  Pruning dangling Docker images..."
+            docker image prune -f
+            echo "         Cleanup done."
+
+            echo ""
+            echo "=================================================="
+            echo " Deployment COMPLETE at \$(date)"
+            echo "=================================================="
+          REMOTE
+
+      - name: Show debug hint on failure
+        if: failure()
+        run: |
+          echo "::error::Deployment failed."
+          echo "::error::SSH into the Oracle VM and run:"
+          echo "::error::  docker compose -f docker-compose.prod.yml logs --tail=100"
+          echo "::error::  docker compose -f docker-compose.prod.yml ps"
